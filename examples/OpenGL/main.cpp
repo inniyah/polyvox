@@ -39,6 +39,7 @@ SOFTWARE.
 #endif
 
 #include <QApplication>
+#include <QElapsedTimer>
 #include <QTime>
 
 //Some namespaces we need
@@ -103,7 +104,7 @@ protected:
 
 		setShader(shader);
 
-		QTime time;
+		QElapsedTimer time;
 		time.start();
 		//openGLWidget.setVolume(&volData);
 		cout << endl << "Time taken = " << time.elapsed() / 1000.0f << "s" << endl << endl;
