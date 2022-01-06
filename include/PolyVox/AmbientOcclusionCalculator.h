@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #ifndef __AmbientOcclusionCalculator_H__
@@ -27,13 +28,9 @@ freely, subject to the following restrictions:
 #include "Impl/RandomUnitVectors.h"
 #include "Impl/RandomVectors.h"
 
-#include "PolyVox/Array.h"
-#include "PolyVox/Region.h"
-#include "PolyVox/Raycast.h"
-
-//These two should not be here!
-#include "PolyVox/Material.h"
-#include "PolyVox/PagedVolume.h"
+#include "Array.h"
+#include "Region.h"
+#include "Raycast.h"
 
 #include <algorithm>
 
@@ -41,11 +38,11 @@ namespace PolyVox
 {
 	/**
 	 * \file
-	 * 
+	 *
 	 * Ambient occlusion
 	 */
-	
-	template<typename IsVoxelTransparentCallback>
+
+	template<typename VolumeType, typename IsVoxelTransparentCallback>
 	class AmbientOcclusionCalculatorRaycastCallback
 	{
 	public:
@@ -53,9 +50,9 @@ namespace PolyVox
 		{
 		}
 
-		bool operator()(const PagedVolume<uint8_t>::Sampler& sampler)
+		bool operator()(const typename VolumeType::Sampler& sampler)
 		{
-			uint8_t sample = sampler.getVoxel();
+			auto sample = sampler.getVoxel();
 			bool func = mIsVoxelTransparentCallback(sample);
 			return func;
 		}
@@ -71,12 +68,12 @@ namespace PolyVox
 	// This will be 'perfect forwarding' using 'universal references'
 	// This will require C++11 rvalue references which is why I haven't made the
 	// change yet.
-	
+
 	/// Calculate the ambient occlusion for the volume
 	template<typename VolumeType, typename IsVoxelTransparentCallback>
-	void calculateAmbientOcclusion(VolumeType* volInput, Array<3, uint8_t>* arrayResult, Region region, float fRayLength, uint8_t uNoOfSamplesPerOutputElement, IsVoxelTransparentCallback isVoxelTransparentCallback);
+	void calculateAmbientOcclusion(VolumeType* volInput, Array<3, uint8_t>* arrayResult, const Region& region, float fRayLength, uint8_t uNoOfSamplesPerOutputElement, IsVoxelTransparentCallback isVoxelTransparentCallback);
 }
 
-#include "PolyVox/AmbientOcclusionCalculator.inl"
+#include "AmbientOcclusionCalculator.inl"
 
 #endif //__AmbientOcclusionCalculator_H__

@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 namespace PolyVox
@@ -29,14 +30,14 @@ namespace PolyVox
 	}
 
 	template <typename VertexType, typename IndexType>
-	Mesh<VertexType, IndexType>::~Mesh()	  
+	Mesh<VertexType, IndexType>::~Mesh()
 	{
 	}
 
 	template <typename VertexType, typename IndexType>
 	IndexType Mesh<VertexType, IndexType>::getNoOfVertices(void) const
 	{
-		return m_vecVertices.size();
+		return static_cast<IndexType>(m_vecVertices.size());
 	}
 
 	template <typename VertexType, typename IndexType>
@@ -48,17 +49,11 @@ namespace PolyVox
 	template <typename VertexType, typename IndexType>
 	const VertexType*  Mesh<VertexType, IndexType>::getRawVertexData(void) const
 	{
-		return &(m_vecVertices[0]);
+		return m_vecVertices.data();
 	}
 
 	template <typename VertexType, typename IndexType>
-	const std::vector<VertexType>& Mesh<VertexType, IndexType>::getVertices(void) const
-	{
-		return m_vecVertices;
-	}
-
-	template <typename VertexType, typename IndexType>
-	uint32_t Mesh<VertexType, IndexType>::getNoOfIndices(void) const
+	size_t Mesh<VertexType, IndexType>::getNoOfIndices(void) const
 	{
 		return m_vecIndices.size();
 	}
@@ -70,15 +65,9 @@ namespace PolyVox
 	}
 
 	template <typename VertexType, typename IndexType>
-	const IndexType* Mesh<VertexType, IndexType>::getRawIndexData(void)
+	const IndexType* Mesh<VertexType, IndexType>::getRawIndexData(void) const
 	{
-		return &(m_vecIndices[0]);
-	}
-
-	template <typename VertexType, typename IndexType>
-	const std::vector<IndexType>& Mesh<VertexType, IndexType>::getIndices(void) const
-	{
-		return m_vecIndices;
+		return m_vecIndices.data();
 	}
 
 	template <typename VertexType, typename IndexType>
@@ -135,7 +124,7 @@ namespace PolyVox
 		std::vector<bool> isVertexUsed(m_vecVertices.size());
 		std::fill(isVertexUsed.begin(), isVertexUsed.end(), false);
 
-		for(uint32_t triCt = 0; triCt < m_vecIndices.size(); triCt++)
+		for (uint32_t triCt = 0; triCt < m_vecIndices.size(); triCt++)
 		{
 			int v = m_vecIndices[triCt];
 			isVertexUsed[v] = true;
@@ -143,9 +132,9 @@ namespace PolyVox
 
 		int noOfUsedVertices = 0;
 		std::vector<uint32_t> newPos(m_vecVertices.size());
-		for(IndexType vertCt = 0; vertCt < m_vecVertices.size(); vertCt++)
+		for (IndexType vertCt = 0; vertCt < m_vecVertices.size(); vertCt++)
 		{
-			if(isVertexUsed[vertCt])
+			if (isVertexUsed[vertCt])
 			{
 				m_vecVertices[noOfUsedVertices] = m_vecVertices[vertCt];
 				newPos[vertCt] = noOfUsedVertices;
@@ -155,7 +144,7 @@ namespace PolyVox
 
 		m_vecVertices.resize(noOfUsedVertices);
 
-		for(uint32_t triCt = 0; triCt < m_vecIndices.size(); triCt++)
+		for (uint32_t triCt = 0; triCt < m_vecIndices.size(); triCt++)
 		{
 			m_vecIndices[triCt] = newPos[m_vecIndices[triCt]];
 		}

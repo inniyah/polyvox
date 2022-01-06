@@ -1,27 +1,28 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
-#include "PolyVox/Impl/ErrorHandling.h"
+#include "Impl/ErrorHandling.h"
 
 #include <algorithm>
 #include <limits>
@@ -30,62 +31,43 @@ namespace PolyVox
 {
 	////////////////////////////////////////////////////////////////////////////////
 	/// This constructor creates a volume with a fixed size which is specified as a parameter. By default this constructor will not enable paging but you can override this if desired. If you do wish to enable paging then you are required to provide the call back function (see the other PagedVolume constructor).
-	/// \param regValid Specifies the minimum and maximum valid voxel positions.
-	/// \param dataRequiredHandler The callback function which will be called when PolyVox tries to use data which is not currently in momory.
-	/// \param dataOverflowHandler The callback function which will be called when PolyVox has too much data and needs to remove some from memory.
-	/// \param bPagingEnabled Controls whether or not paging is enabled for this PagedVolume.
+	/// \param pPager Called by PolyVox to load and unload data on demand.
+	/// \param uTargetMemoryUsageInBytes The upper limit to how much memory this PagedVolume should aim to use.
 	/// \param uChunkSideLength The size of the chunks making up the volume. Small chunks will compress/decompress faster, but there will also be more of them meaning voxel access could be slower.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	PagedVolume<VoxelType>::PagedVolume
-	(
-		const Region& regValid,
-		Pager* pPager,
-		uint16_t uChunkSideLength
-	)
-	:BaseVolume<VoxelType>(regValid)
+	PagedVolume<VoxelType>::PagedVolume(Pager* pPager, uint32_t uTargetMemoryUsageInBytes, uint16_t uChunkSideLength)
+		:BaseVolume<VoxelType>()
+		, m_uChunkSideLength(uChunkSideLength)
+		, m_pPager(pPager)
 	{
-		m_uChunkSideLength = uChunkSideLength;
-		m_pPager = pPager;
+			// Validation of parameters
+			POLYVOX_THROW_IF(!pPager, std::invalid_argument, "You must provide a valid pager when constructing a PagedVolume");
+			POLYVOX_THROW_IF(uTargetMemoryUsageInBytes < 1 * 1024 * 1024, std::invalid_argument, "Target memory usage is too small to be practical");
+			POLYVOX_THROW_IF(m_uChunkSideLength == 0, std::invalid_argument, "Chunk side length cannot be zero.");
+			POLYVOX_THROW_IF(m_uChunkSideLength > 256, std::invalid_argument, "Chunk size is too large to be practical.");
+			POLYVOX_THROW_IF(!isPowerOf2(m_uChunkSideLength), std::invalid_argument, "Chunk side length must be a power of two.");
 
-		if (m_pPager)
-		{
-			// If the user is creating a vast (almost infinite) volume then we can bet they will be
-			// expecting a high memory usage and will want a fair number of chunks to play around with.
-			if (regValid == Region::MaxRegion())
-			{
-				m_uChunkCountLimit = 1024;
-			}
-			else
-			{
-				// Otherwise we try to choose a chunk count to avoid too much thrashing, particularly when iterating
-				// over the whole volume. This means at least enough chunks to cover one edge of the volume, and ideally 
-				// enough for a whole face. Which face? Longest edge by shortest edge seems like a reasonable guess.
-				uint32_t longestSide = (std::max)(regValid.getWidthInVoxels(), (std::max)(regValid.getHeightInVoxels(), regValid.getDepthInVoxels()));
-				uint32_t shortestSide = (std::min)(regValid.getWidthInVoxels(), (std::min)(regValid.getHeightInVoxels(), regValid.getDepthInVoxels()));
+			// Used to perform multiplications and divisions by bit shifting.
+			m_uChunkSideLengthPower = logBase2(m_uChunkSideLength);
+			// Use to perform modulo by bit operations
+			m_iChunkMask = m_uChunkSideLength - 1;
 
-				longestSide /= m_uChunkSideLength;
-				shortestSide /= m_uChunkSideLength;
+			// Calculate the number of chunks based on the memory limit and the size of each chunk.
+			uint32_t uChunkSizeInBytes = PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
+			m_uChunkCountLimit = uTargetMemoryUsageInBytes / uChunkSizeInBytes;
 
-				m_uChunkCountLimit = longestSide * shortestSide;
-			}
-		}
-		else
-		{
-			// If there is no pager provided then we set the chunk limit to the maximum
-			// value to ensure the system never attempts to page chunks out of memory.
-			m_uChunkCountLimit = (std::numeric_limits<uint32_t>::max)();
-		}
+			// Enforce sensible limits on the number of chunks.
+			const uint32_t uMinPracticalNoOfChunks = 32; // Enough to make sure a chunks and it's neighbours can be loaded, with a few to spare.
+			const uint32_t uMaxPracticalNoOfChunks = uChunkArraySize / 2; // A hash table should only become half-full to avoid too many clashes.
+			POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of ",
+				uTargetMemoryUsageInBytes / (1024 * 1024), "Mb is too low and cannot be adhered to.");
+			m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
+			m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
 
-		// Make sure the calculated chunk limit is within practical bounds
-		m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
-		m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
-
-		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
-		POLYVOX_LOG_DEBUG("Memory usage limit for volume initially set to " << (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024)
-			<< "Mb (" << m_uChunkCountLimit << " chunks of " << uChunkSizeInBytes / 1024 << "Kb each).");
-
-		initialise();
+			// Inform the user about the chosen memory configuration.
+			POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to ", (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024),
+				"Mb (", m_uChunkCountLimit, " chunks of ", uChunkSizeInBytes / 1024, "Kb each).");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -98,7 +80,7 @@ namespace PolyVox
 	template <typename VoxelType>
 	PagedVolume<VoxelType>::PagedVolume(const PagedVolume<VoxelType>& /*rhs*/)
 	{
-		POLYVOX_THROW(not_implemented, "Volume copy constructor not implemented for performance reasons.");
+		POLYVOX_THROW(not_implemented, "Volume copy constructor not implemented to prevent accidental copying.");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -120,43 +102,7 @@ namespace PolyVox
 	template <typename VoxelType>
 	PagedVolume<VoxelType>& PagedVolume<VoxelType>::operator=(const PagedVolume<VoxelType>& /*rhs*/)
 	{
-		POLYVOX_THROW(not_implemented, "Volume assignment operator not implemented for performance reasons.");
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// This version of the function requires the wrap mode to be specified as a
-	/// template parameter, which can provide better performance.
-	/// \param uXPos The \c x position of the voxel
-	/// \param uYPos The \c y position of the voxel
-	/// \param uZPos The \c z position of the voxel
-	/// \tparam eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// \param tBorder The border value to use if the wrap mode is set to 'Border'.
-	/// \return The voxel value
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	template <WrapMode eWrapMode>
-	VoxelType PagedVolume<VoxelType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tBorder) const
-	{
-		// Simply call through to the real implementation
-		return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<eWrapMode>(), tBorder);
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// This version of the function requires the wrap mode to be specified as a
-	/// template parameter, which can provide better performance.
-	/// \param uXPos The \c x position of the voxel
-	/// \param uYPos The \c y position of the voxel
-	/// \param uZPos The \c z position of the voxel
-	/// \tparam eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// \param tBorder The border value to use if the wrap mode is set to 'Border'.
-	/// \return The voxel value
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	template <WrapMode eWrapMode>
-	VoxelType PagedVolume<VoxelType>::getVoxel(const Vector3DInt32& v3dPos, VoxelType tBorder) const
-	{
-		// Simply call through to the real implementation
-		return getVoxel<eWrapMode>(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tBorder);
+		POLYVOX_THROW(not_implemented, "Volume assignment operator not implemented to prevent accidental copying.");
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -165,139 +111,44 @@ namespace PolyVox
 	/// \param uXPos The \c x position of the voxel
 	/// \param uYPos The \c y position of the voxel
 	/// \param uZPos The \c z position of the voxel
-	/// \param eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// \param tBorder The border value to use if the wrap mode is set to 'Border'.
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapMode eWrapMode, VoxelType tBorder) const
+	VoxelType PagedVolume<VoxelType>::getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
 	{
-		switch(eWrapMode)
-		{
-		case WrapModes::Validate:
-			return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::Validate>(), tBorder);
-		case WrapModes::Clamp:
-			return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::Clamp>(), tBorder);
-		case WrapModes::Border:
-			return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::Border>(), tBorder);
-		case WrapModes::AssumeValid:
-			return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::AssumeValid>(), tBorder);
-		default:
-			// Should never happen
-			POLYVOX_ASSERT(false, "Invalid wrap mode");
-			return VoxelType();
-		}
+		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
+		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
+		const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
+
+		const uint16_t xOffset = static_cast<uint16_t>(uXPos & m_iChunkMask);
+		const uint16_t yOffset = static_cast<uint16_t>(uYPos & m_iChunkMask);
+		const uint16_t zOffset = static_cast<uint16_t>(uZPos & m_iChunkMask);
+
+		auto pChunk = canReuseLastAccessedChunk(chunkX, chunkY, chunkZ) ? m_pLastAccessedChunk : getChunk(chunkX, chunkY, chunkZ);
+
+		return pChunk->getVoxel(xOffset, yOffset, zOffset);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
 	/// This version of the function is provided so that the wrap mode does not need
 	/// to be specified as a template parameter, as it may be confusing to some users.
 	/// \param v3dPos The 3D position of the voxel
-	/// \param eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// \param tBorder The border value to use if the wrap mode is set to 'Border'.
 	/// \return The voxel value
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxel(const Vector3DInt32& v3dPos, WrapMode eWrapMode, VoxelType tBorder) const
+	VoxelType PagedVolume<VoxelType>::getVoxel(const Vector3DInt32& v3dPos) const
 	{
-		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), eWrapMode, tBorder);
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// \param uXPos The \c x position of the voxel
-	/// \param uYPos The \c y position of the voxel
-	/// \param uZPos The \c z position of the voxel
-	/// \return The voxel value
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelAt(int32_t uXPos, int32_t uYPos, int32_t uZPos) const
-	{
-		if(this->m_regValidRegion.containsPoint(Vector3DInt32(uXPos, uYPos, uZPos)))
-		{
-			const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
-			const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
-			const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
-
-			const uint16_t xOffset = static_cast<uint16_t>(uXPos - (chunkX << m_uChunkSideLengthPower));
-			const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
-			const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
-
-			auto pChunk = getChunk(chunkX, chunkY, chunkZ);
-
-			return pChunk->getVoxel(xOffset, yOffset, zOffset);
-		}
-		else
-		{
-			return this->getBorderValue();
-		}
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// \param v3dPos The 3D position of the voxel
-	/// \return The voxel value
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelAt(const Vector3DInt32& v3dPos) const
-	{
-		return getVoxelAt(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// Increasing the size of the chunk cache will increase memory but may improve performance.
-	/// You may want to set this to a large value (e.g. 1024) when you are first loading your
-	/// volume data and then set it to a smaller value (e.g.64) for general processing.
-	/// \param uMaxNumberOfChunks The number of chunks for which uncompressed data can be cached.
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::setMemoryUsageLimit(uint32_t uMemoryUsageInBytes)
-	{
-		POLYVOX_THROW_IF(!m_pPager, invalid_operation, "You cannot limit the memory usage of the volume because it was created without a pager attached.");
-
-		// Calculate the number of chunks based on the memory limit and the size of each chunk.
-		uint32_t uChunkSizeInBytes = PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength);
-		m_uChunkCountLimit = uMemoryUsageInBytes / uChunkSizeInBytes;
-
-		// We need at least a few chunks available to avoid thrashing, and in pratice there will probably be hundreds.
-		POLYVOX_LOG_WARNING_IF(m_uChunkCountLimit < uMinPracticalNoOfChunks, "Requested memory usage limit of " 
-			<< uMemoryUsageInBytes / (1024 * 1024) << "Mb is too low and cannot be adhered to.");
-		m_uChunkCountLimit = (std::max)(m_uChunkCountLimit, uMinPracticalNoOfChunks);
-		m_uChunkCountLimit = (std::min)(m_uChunkCountLimit, uMaxPracticalNoOfChunks);
-
-		// If the new limit is less than the number of chunks already loaded then the easiest solution is to flush and start loading again.
-		if (m_pRecentlyUsedChunks.size() > m_uChunkCountLimit)
-		{
-			flushAll();
-		}
-
-		POLYVOX_LOG_DEBUG("Memory usage limit for volume now set to " << (m_uChunkCountLimit * uChunkSizeInBytes) / (1024 * 1024)
-			<< "Mb (" << m_uChunkCountLimit << " chunks of " << uChunkSizeInBytes / 1024 << "Kb each).");
+		return getVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ());
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
 	/// \param uXPos the \c x position of the voxel
 	/// \param uYPos the \c y position of the voxel
 	/// \param uZPos the \c z position of the voxel
-	/// \param tValue the value to which the voxel will be set
-	/// \param eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// This must be set to 'None' or 'DontCheck'. Other wrap modes cannot be used when writing to volume data.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	void PagedVolume<VoxelType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue, WrapMode eWrapMode)
+	void PagedVolume<VoxelType>::setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
 	{
-		if((eWrapMode != WrapModes::Validate) && (eWrapMode != WrapModes::AssumeValid))
-		{
-			POLYVOX_THROW(std::invalid_argument, "Invalid wrap mode in call to setVoxel(). It must be 'None' or 'DontCheck'.");
-		}
-
-		// This validation is skipped if the wrap mode is 'DontCheck'
-		if(eWrapMode == WrapModes::Validate)
-		{
-			if(this->m_regValidRegion.containsPoint(Vector3DInt32(uXPos, uYPos, uZPos)) == false)
-			{
-				POLYVOX_THROW(std::out_of_range, "Position is outside valid region");
-			}
-		}
-
 		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
 		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
 		const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
@@ -306,62 +157,20 @@ namespace PolyVox
 		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
 		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
 
-		auto pChunk = getChunk(chunkX, chunkY, chunkZ);
-		pChunk->setVoxelAt(xOffset, yOffset, zOffset, tValue);
+		auto pChunk = canReuseLastAccessedChunk(chunkX, chunkY, chunkZ) ? m_pLastAccessedChunk : getChunk(chunkX, chunkY, chunkZ);
+
+		pChunk->setVoxel(xOffset, yOffset, zOffset, tValue);
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
 	/// \param v3dPos the 3D position of the voxel
 	/// \param tValue the value to which the voxel will be set
-	/// \param eWrapMode Specifies the behaviour when the requested position is outside of the volume.
-	/// This must be set to 'None' or 'DontCheck'. Other wrap modes cannot be used when writing to volume data.
 	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	void PagedVolume<VoxelType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue, WrapMode eWrapMode)
+	void PagedVolume<VoxelType>::setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue)
 	{
-		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue, eWrapMode);
+		setVoxel(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
 	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// \param uXPos the \c x position of the voxel
-	/// \param uYPos the \c y position of the voxel
-	/// \param uZPos the \c z position of the voxel
-	/// \param tValue the value to which the voxel will be set
-	/// \return whether the requested position is inside the volume
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	bool PagedVolume<VoxelType>::setVoxelAt(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue)
-	{
-		// PolyVox does not throw an exception when a voxel is out of range. Please see 'Error Handling' in the User Manual.
-		POLYVOX_ASSERT(this->m_regValidRegion.containsPoint(Vector3DInt32(uXPos, uYPos, uZPos)), "Position is outside valid region");
-
-		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
-		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
-		const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
-
-		const uint16_t xOffset = static_cast<uint16_t>(uXPos - (chunkX << m_uChunkSideLengthPower));
-		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
-		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
-
-		auto pChunk = getChunk(chunkX, chunkY, chunkZ);
-
-		pChunk->setVoxelAt(xOffset, yOffset, zOffset, tValue);
-
-		//Return true to indicate that we modified a voxel.
-		return true;
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// \param v3dPos the 3D position of the voxel
-	/// \param tValue the value to which the voxel will be set
-	/// \return whether the requested position is inside the volume
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	bool PagedVolume<VoxelType>::setVoxelAt(const Vector3DInt32& v3dPos, VoxelType tValue)
-	{
-		return setVoxelAt(v3dPos.getX(), v3dPos.getY(), v3dPos.getZ(), tValue);
-	}
-
 
 	////////////////////////////////////////////////////////////////////////////////
 	/// Note that if the memory usage limit is not large enough to support the region this function will only load part of the region. In this case it is undefined which parts will actually be loaded. If all the voxels in the given region are already loaded, this function will not do anything. Other voxels might be unloaded to make space for the new voxels.
@@ -372,13 +181,13 @@ namespace PolyVox
 	{
 		// Convert the start and end positions into chunk space coordinates
 		Vector3DInt32 v3dStart;
-		for(int i = 0; i < 3; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			v3dStart.setElement(i, regPrefetch.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
 		}
 
 		Vector3DInt32 v3dEnd;
-		for(int i = 0; i < 3; i++)
+		for (int i = 0; i < 3; i++)
 		{
 			v3dEnd.setElement(i, regPrefetch.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
 		}
@@ -386,17 +195,17 @@ namespace PolyVox
 		// Ensure we don't page in more chunks than the volume can hold.
 		Region region(v3dStart, v3dEnd);
 		uint32_t uNoOfChunks = static_cast<uint32_t>(region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels());
-		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to prefetch more than the maximum number of chunks.");
+		POLYVOX_LOG_WARNING_IF(uNoOfChunks > m_uChunkCountLimit, "Attempting to prefetch more than the maximum number of chunks (this will cause thrashing).");
 		uNoOfChunks = (std::min)(uNoOfChunks, m_uChunkCountLimit);
 
 		// Loops over the specified positions and touch the corresponding chunks.
-		for(int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
+		for (int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
 		{
-			for(int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
+			for (int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
 			{
-				for(int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
-				{					
-					getChunk(x,y,z);
+				for (int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
+				{
+					getChunk(x, y, z);
 				}
 			}
 		}
@@ -408,200 +217,126 @@ namespace PolyVox
 	template <typename VoxelType>
 	void PagedVolume<VoxelType>::flushAll()
 	{
-		POLYVOX_LOG_WARNING_IF(!m_pPager, "Data discarded by flush operation as no pager is attached.");
-
-		// Clear this pointer so it doesn't hang on to any chunks.
+		// Clear this pointer as all chunks are about to be removed.
 		m_pLastAccessedChunk = nullptr;
 
 		// Erase all the most recently used chunks.
-		m_pRecentlyUsedChunks.clear();
-
-		// Remove deleted chunks from the list of all loaded chunks.
-		purgeNullPtrsFromAllChunks();
-
-		// If there are still some chunks left then this is a cause for concern. Perhaps samplers are holding on to them?
-		POLYVOX_LOG_WARNING_IF(m_pAllChunks.size() > 0, "Chunks still exist after performing flushAll()! Perhaps you have samplers attached?");
+		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+		{
+			m_arrayChunks[uIndex] = nullptr;
+		}
 	}
 
-	////////////////////////////////////////////////////////////////////////////////
-	/// Removes all voxels in the specified Region from memory, and calls dataOverflowHandler() to ensure the application has a chance to store the data. It is possible that there are no voxels loaded in the Region, in which case the function will have no effect.
-	////////////////////////////////////////////////////////////////////////////////
 	template <typename VoxelType>
-	void PagedVolume<VoxelType>::flush(Region regFlush)
+	bool PagedVolume<VoxelType>::canReuseLastAccessedChunk(int32_t iChunkX, int32_t iChunkY, int32_t iChunkZ) const
 	{
-		POLYVOX_LOG_WARNING_IF(!m_pPager, "Data discarded by flush operation as no pager is attached.");
+		return ((iChunkX == m_v3dLastAccessedChunkX) &&
+			(iChunkY == m_v3dLastAccessedChunkY) &&
+			(iChunkZ == m_v3dLastAccessedChunkZ) &&
+			(m_pLastAccessedChunk));
+	}
 
-		// Clear this pointer so it doesn't hang on to any chunks.
-		m_pLastAccessedChunk = nullptr;
+	template <typename VoxelType>
+	typename PagedVolume<VoxelType>::Chunk* PagedVolume<VoxelType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
+	{
+		Chunk* pChunk = nullptr;
 
-		// Convert the start and end positions into chunk space coordinates
-		Vector3DInt32 v3dStart;
-		for(int i = 0; i < 3; i++)
+		// We generate a 16-bit hash here and assume this matches the range available in the chunk
+		// array. The assert here is just to make sure we take care if change this in the future.
+		static_assert(uChunkArraySize == 65536, "Chunk array size has changed, check if the hash calculation needs updating.");
+		// Extract the lower five bits from each position component.
+		const uint32_t uChunkXLowerBits = static_cast<uint32_t>(uChunkX & 0x1F);
+		const uint32_t uChunkYLowerBits = static_cast<uint32_t>(uChunkY & 0x1F);
+		const uint32_t uChunkZLowerBits = static_cast<uint32_t>(uChunkZ & 0x1F);
+		// Combine then to form a 15-bit hash of the position. Also shift by one to spread the values out in the whole 16-bit space.
+		const uint32_t iPosisionHash = (((uChunkXLowerBits)) | ((uChunkYLowerBits) << 5) | ((uChunkZLowerBits) << 10) << 1);
+
+		// Starting at the position indicated by the hash, and then search through the whole array looking for a chunk with the correct
+		// position. In most cases we expect to find it in the first place we look. Note that this algorithm is slow in the case that
+		// the chunk is not found because the whole array has to be searched, but in this case we are going to have to page the data in
+		// from an external source which is likely to be slow anyway.
+		uint32_t iIndex = iPosisionHash;
+		do
 		{
-			v3dStart.setElement(i, regFlush.getLowerCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		Vector3DInt32 v3dEnd;
-		for(int i = 0; i < 3; i++)
-		{
-			v3dEnd.setElement(i, regFlush.getUpperCorner().getElement(i) >> m_uChunkSideLengthPower);
-		}
-
-		// Loops over the specified positions and delete the corresponding chunks.
-		for(int32_t x = v3dStart.getX(); x <= v3dEnd.getX(); x++)
-		{
-			for(int32_t y = v3dStart.getY(); y <= v3dEnd.getY(); y++)
+			if (m_arrayChunks[iIndex])
 			{
-				for(int32_t z = v3dStart.getZ(); z <= v3dEnd.getZ(); z++)
+				Vector3DInt32& entryPos = m_arrayChunks[iIndex]->m_v3dChunkSpacePosition;
+				if (entryPos.getX() == uChunkX && entryPos.getY() == uChunkY && entryPos.getZ() == uChunkZ)
 				{
-					m_pRecentlyUsedChunks.erase(Vector3DInt32(x, y, z));
+					pChunk = m_arrayChunks[iIndex].get();
+					pChunk->m_uChunkLastAccessed = ++m_uTimestamper;
+					break;
 				}
 			}
-		}
 
-		m_pLastAccessedChunk = nullptr;
-
-		// We might now have so null pointers in the 'all chunks' list so clean them up.
-		purgeNullPtrsFromAllChunks();
-	}
-
-	////////////////////////////////////////////////////////////////////////////////
-	/// This function should probably be made internal...
-	////////////////////////////////////////////////////////////////////////////////
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::initialise()
-	{		
-		//Validate parameters
-		if(m_uChunkSideLength == 0)
-		{
-			POLYVOX_THROW(std::invalid_argument, "Chunk side length cannot be zero.");
-		}
-
-		if(!isPowerOf2(m_uChunkSideLength))
-		{
-			POLYVOX_THROW(std::invalid_argument, "Chunk side length must be a power of two.");
-		}
-
-		m_uTimestamper = 0;
-		m_v3dLastAccessedChunkPos = Vector3DInt32(0,0,0); //There are no invalid positions, but initially the m_pLastAccessedChunk pointer will be null;
-		m_pLastAccessedChunk = nullptr;
-
-		//Compute the chunk side length
-		m_uChunkSideLengthPower = logBase2(m_uChunkSideLength);
-
-		m_regValidRegionInChunks.setLowerX(this->m_regValidRegion.getLowerX() >> m_uChunkSideLengthPower);
-		m_regValidRegionInChunks.setLowerY(this->m_regValidRegion.getLowerY() >> m_uChunkSideLengthPower);
-		m_regValidRegionInChunks.setLowerZ(this->m_regValidRegion.getLowerZ() >> m_uChunkSideLengthPower);
-		m_regValidRegionInChunks.setUpperX(this->m_regValidRegion.getUpperX() >> m_uChunkSideLengthPower);
-		m_regValidRegionInChunks.setUpperY(this->m_regValidRegion.getUpperY() >> m_uChunkSideLengthPower);
-		m_regValidRegionInChunks.setUpperZ(this->m_regValidRegion.getUpperZ() >> m_uChunkSideLengthPower);
-
-		//setMaxNumberOfChunks(m_uChunkCountLimit);
-
-		//Clear the previous data
-		m_pRecentlyUsedChunks.clear();
-
-		//Other properties we might find useful later
-		this->m_uLongestSideLength = (std::max)((std::max)(this->getWidth(),this->getHeight()),this->getDepth());
-		this->m_uShortestSideLength = (std::min)((std::min)(this->getWidth(),this->getHeight()),this->getDepth());
-		this->m_fDiagonalLength = sqrtf(static_cast<float>(this->getWidth() * this->getWidth() + this->getHeight() * this->getHeight() + this->getDepth() * this->getDepth()));
-	}
-
-	template <typename VoxelType>
-	std::shared_ptr<typename PagedVolume<VoxelType>::Chunk> PagedVolume<VoxelType>::getChunk(int32_t uChunkX, int32_t uChunkY, int32_t uChunkZ) const
-	{
-		Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
-
-		//Check if we have the same chunk as last time, if so there's no need to even update
-		//the time stamp. If we updated it everytime then that would be every time we touched
-		//a voxel, which would overflow a uint32_t and require us to use a uint64_t instead.
-		//This check should also provide a significant speed boost as usually it is true.
-		if((v3dChunkPos == m_v3dLastAccessedChunkPos) && (m_pLastAccessedChunk != 0))
-		{
-			return m_pLastAccessedChunk;
-		}
-
-		// The chunk was not the same as last time, but we can now hope it is in the set of most recently used chunks.
-		std::shared_ptr<typename PagedVolume<VoxelType>::Chunk> pChunk = nullptr;
-		typename SharedPtrChunkMap::iterator itChunk = m_pRecentlyUsedChunks.find(v3dChunkPos);
-
-		// Check whether the chunk was found.
-		if ((itChunk) != m_pRecentlyUsedChunks.end())
-		{
-			// The chunk was found so we can use it.
-			pChunk = itChunk->second;		
-			POLYVOX_ASSERT(pChunk, "Recent chunk list shold never contain a null pointer.");
-		}
-
-		if (!pChunk)
-		{
-			// Although it's not in our recently use chunks, there's some (slim) chance that it
-			// exists in the list of all loaded chunks, because a sampler may be holding on to it.
-			typename WeakPtrChunkMap::iterator itWeakChunk = m_pAllChunks.find(v3dChunkPos);
-			if (itWeakChunk != m_pAllChunks.end())
-			{
-				// We've found an entry in the 'all chunks' list, but it can be null. This happens if a sampler was the
-				// last thing to be keeping it alive and then the sampler let it go. In this case we remove it from the
-				// list, and it will get added again soon when we page it in and fill it with valid data.
-				if (itWeakChunk->second.expired())
-				{
-					m_pAllChunks.erase(itWeakChunk);
-				}
-				else
-				{
-					// The chunk is valid. We know it's not in the recently used list (we checked earlier) so it should be added.
-					pChunk = std::shared_ptr< PagedVolume<VoxelType>::Chunk >(itWeakChunk->second);
-					m_pRecentlyUsedChunks.insert(std::make_pair(v3dChunkPos, pChunk));
-				}
-			}
-		}
+			iIndex++;
+			iIndex %= uChunkArraySize;
+		} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
 
 		// If we still haven't found the chunk then it's time to create a new one and page it in from disk.
 		if (!pChunk)
 		{
 			// The chunk was not found so we will create a new one.
-			pChunk = std::make_shared< PagedVolume<VoxelType>::Chunk >(v3dChunkPos, m_uChunkSideLength, m_pPager);
+			Vector3DInt32 v3dChunkPos(uChunkX, uChunkY, uChunkZ);
+			pChunk = new PagedVolume<VoxelType>::Chunk(v3dChunkPos, m_uChunkSideLength, m_pPager);
+			pChunk->m_uChunkLastAccessed = ++m_uTimestamper; // Important, as we may soon delete the oldest chunk
 
-			// As we are loading a new chunk we should try to ensure we don't go over our target memory usage.
-			bool erasedChunk = false;
-			while (m_pRecentlyUsedChunks.size() + 1 > m_uChunkCountLimit) // +1 ready for new chunk we will add next.
+			// Store the chunk at the appropriate place in out chunk array. Ideally this place is
+			// given by the hash, otherwise we do a linear search for the next available location
+			// We always expect to find a free place because we aim to keep the array only half full.
+			uint32_t iIndex = iPosisionHash;
+			bool bInsertedSucessfully = false;
+			do
 			{
-				// This should never hit, because it should not have been possible for
-				// the user to limit the number of chunks if they did not provide a pager.
-				POLYVOX_ASSERT(m_pPager, "A valid pager is required to limit number of chunks");
-
-				// Find the least recently used chunk. Hopefully this isn't too slow.
-				typename SharedPtrChunkMap::iterator itUnloadChunk = m_pRecentlyUsedChunks.begin();
-				for (typename SharedPtrChunkMap::iterator i = m_pRecentlyUsedChunks.begin(); i != m_pRecentlyUsedChunks.end(); i++)
+				if (m_arrayChunks[iIndex] == nullptr)
 				{
-					if (i->second->m_uChunkLastAccessed < itUnloadChunk->second->m_uChunkLastAccessed)
-					{
-						itUnloadChunk = i;
-					}
+					m_arrayChunks[iIndex] = std::move(std::unique_ptr< Chunk >(pChunk));
+					bInsertedSucessfully = true;
+					break;
 				}
 
-				// Erase the least recently used chunk
-				m_pRecentlyUsedChunks.erase(itUnloadChunk);
-				erasedChunk = true;
-			}
+				iIndex++;
+				iIndex %= uChunkArraySize;
+			} while (iIndex != iPosisionHash); // Keep searching until we get back to our start position.
 
-			// If we've deleted any chunks from the recently used list then this
-			// seems like a good place to purge the 'all chunks' list as well.
-			if (erasedChunk)
+			// This should never really happen unless we are failing to keep our number of active chunks
+			// significantly under the target amount. Perhaps if chunks are 'pinned' for threading purposes?
+			POLYVOX_THROW_IF(!bInsertedSucessfully, std::logic_error, "No space in chunk array for new chunk.");
+
+			// As we have added a chunk we may have exceeded our target chunk limit. Search through the array to
+			// determine how many chunks we have, as well as finding the oldest timestamp. Note that this is potentially
+			// wasteful and we may instead wish to track how many chunks we have and/or delete a chunk at random (or
+			// just check e.g. 10 and delete the oldest of those) but we'll see if this is a bottleneck first. Paging
+			// the data in is probably more expensive.
+			uint32_t uChunkCount = 0;
+			uint32_t uOldestChunkIndex = 0;
+			uint32_t uOldestChunkTimestamp = std::numeric_limits<uint32_t>::max();
+			for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
 			{
-				purgeNullPtrsFromAllChunks();
+				if (m_arrayChunks[uIndex])
+				{
+					uChunkCount++;
+					if (m_arrayChunks[uIndex]->m_uChunkLastAccessed < uOldestChunkTimestamp)
+					{
+						uOldestChunkTimestamp = m_arrayChunks[uIndex]->m_uChunkLastAccessed;
+						uOldestChunkIndex = uIndex;
+					}
+				}
 			}
 
-			// Add our new chunk to the maps.
-			m_pAllChunks.insert(std::make_pair(v3dChunkPos, pChunk));
-			m_pRecentlyUsedChunks.insert(std::make_pair(v3dChunkPos, pChunk));
+			// Check if we have too many chunks, and delete the oldest if so.
+			if (uChunkCount > m_uChunkCountLimit)
+			{
+				m_arrayChunks[uOldestChunkIndex] = nullptr;
+			}
 		}
 
-		pChunk->m_uChunkLastAccessed = ++m_uTimestamper;
 		m_pLastAccessedChunk = pChunk;
-		m_v3dLastAccessedChunkPos = v3dChunkPos;
+		m_v3dLastAccessedChunkX = uChunkX;
+		m_v3dLastAccessedChunkY = uChunkY;
+		m_v3dLastAccessedChunkZ = uChunkZ;
 
-		return pChunk;	
+		return pChunk;
 	}
 
 	////////////////////////////////////////////////////////////////////////////////
@@ -610,89 +345,18 @@ namespace PolyVox
 	template <typename VoxelType>
 	uint32_t PagedVolume<VoxelType>::calculateSizeInBytes(void)
 	{
-		// Purge null chunks so we know that all chunks are used.
-		purgeNullPtrsFromAllChunks();
+		uint32_t uChunkCount = 0;
+		for (uint32_t uIndex = 0; uIndex < uChunkArraySize; uIndex++)
+		{
+			if (m_arrayChunks[uIndex])
+			{
+				uChunkCount++;
+			}
+		}
 
 		// Note: We disregard the size of the other class members as they are likely to be very small compared to the size of the
 		// allocated voxel data. This also keeps the reported size as a power of two, which makes other memory calculations easier.
-		return PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * m_pAllChunks.size();
-	}
-
-	template <typename VoxelType>
-	void PagedVolume<VoxelType>::purgeNullPtrsFromAllChunks(void) const
-	{
-		for (auto chunkIter = m_pAllChunks.begin(); chunkIter != m_pAllChunks.end();)
-		{
-			if (chunkIter->second.expired())
-			{
-				chunkIter = m_pAllChunks.erase(chunkIter);
-			}
-			else
-			{
-				chunkIter++;
-			}
-		}
-	}
-
-	template <typename VoxelType>
-	template <WrapMode eWrapMode>
-	VoxelType PagedVolume<VoxelType>::getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<eWrapMode>, VoxelType tBorder) const
-	{
-		// This function should never be called because one of the specialisations should always match.
-		POLYVOX_ASSERT(false, "This function is not implemented and should never be called!");
-	}
-
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Validate>, VoxelType tBorder) const
-	{
-		if(this->m_regValidRegion.containsPoint(Vector3DInt32(uXPos, uYPos, uZPos)) == false)
-		{
-			POLYVOX_THROW(std::out_of_range, "Position is outside valid region");
-		}
-
-		return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::AssumeValid>(), tBorder); // No wrapping as we've just validated the position.
-	}
-
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Clamp>, VoxelType tBorder) const
-	{
-		//Perform clamping
-		uXPos = (std::max)(uXPos, this->m_regValidRegion.getLowerX());
-		uYPos = (std::max)(uYPos, this->m_regValidRegion.getLowerY());
-		uZPos = (std::max)(uZPos, this->m_regValidRegion.getLowerZ());
-		uXPos = (std::min)(uXPos, this->m_regValidRegion.getUpperX());
-		uYPos = (std::min)(uYPos, this->m_regValidRegion.getUpperY());
-		uZPos = (std::min)(uZPos, this->m_regValidRegion.getUpperZ());
-
-		return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::AssumeValid>(), tBorder); // No wrapping as we've just validated the position.
-	}
-
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Border>, VoxelType tBorder) const
-	{
-		if(this->m_regValidRegion.containsPoint(uXPos, uYPos, uZPos))
-		{
-			return getVoxelImpl(uXPos, uYPos, uZPos, WrapModeType<WrapModes::AssumeValid>(), tBorder); // No wrapping as we've just validated the position.
-		}
-		else
-		{
-			return tBorder;
-		}
-	}
-
-	template <typename VoxelType>
-	VoxelType PagedVolume<VoxelType>::getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::AssumeValid>, VoxelType /*tBorder*/) const
-	{
-		const int32_t chunkX = uXPos >> m_uChunkSideLengthPower;
-		const int32_t chunkY = uYPos >> m_uChunkSideLengthPower;
-		const int32_t chunkZ = uZPos >> m_uChunkSideLengthPower;
-
-		const uint16_t xOffset = static_cast<uint16_t>(uXPos - (chunkX << m_uChunkSideLengthPower));
-		const uint16_t yOffset = static_cast<uint16_t>(uYPos - (chunkY << m_uChunkSideLengthPower));
-		const uint16_t zOffset = static_cast<uint16_t>(uZPos - (chunkZ << m_uChunkSideLengthPower));
-
-		auto pChunk = getChunk(chunkX, chunkY, chunkZ);
-		return pChunk->getVoxel(xOffset, yOffset, zOffset);
+		return PagedVolume<VoxelType>::Chunk::calculateSizeInBytes(m_uChunkSideLength) * uChunkCount;
 	}
 }
 

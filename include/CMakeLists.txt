@@ -1,24 +1,26 @@
-# Copyright (c) 2008-2012 Matt Williams
-# Copyright (c) 2008-2012 David Williams
-# 
-# This software is provided 'as-is', without any express or implied
-# warranty. In no event will the authors be held liable for any damages
-# arising from the use of this software.
-# 
-# Permission is granted to anyone to use this software for any purpose,
-# including commercial applications, and to alter it and redistribute it
-# freely, subject to the following restrictions:
-# 
-# 1. The origin of this software must not be misrepresented; you must not
-# claim that you wrote the original software. If you use this software
-# in a product, an acknowledgment in the product documentation would be
-# appreciated but is not required.
-# 
-# 2. Altered source versions must be plainly marked as such, and must not be
-# misrepresented as being the original software.
-# 
-# 3. This notice may not be removed or altered from any source
-# distribution.
+################################################################################
+# The MIT License (MIT)
+#
+# Copyright (c) 2015 Matthew Williams and David Williams
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+################################################################################
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 
@@ -41,13 +43,9 @@ SET(CORE_INC_FILES
 	PolyVox/Density.h
 	PolyVox/DualContouringSurfaceExtractor.h
 	PolyVox/DualContouringSurfaceExtractor.inl
+	PolyVox/Exceptions.h
 	PolyVox/FilePager.h
-	PolyVox/GradientEstimators.h
-	PolyVox/GradientEstimators.inl
-	PolyVox/Interpolation.h
-	PolyVox/IteratorController.h
-	PolyVox/IteratorController.inl
-	PolyVox/LargeVolume.h
+	PolyVox/Logging.h
 	PolyVox/LowPassFilter.h
 	PolyVox/LowPassFilter.inl
 	PolyVox/MarchingCubesSurfaceExtractor.h
@@ -60,7 +58,6 @@ SET(CORE_INC_FILES
 	PolyVox/PagedVolume.inl
 	PolyVox/PagedVolumeChunk.inl
 	PolyVox/PagedVolumeSampler.inl
-	PolyVox/PolyVoxForwardDeclarations.h
 	PolyVox/Picking.h
 	PolyVox/Picking.inl
 	PolyVox/RawVolume.h
@@ -70,28 +67,30 @@ SET(CORE_INC_FILES
 	PolyVox/Raycast.inl
 	PolyVox/Region.h
 	PolyVox/Region.inl
-	PolyVox/SimpleVolume.h
 	PolyVox/Vector.h
 	PolyVox/Vector.inl
 	PolyVox/Vertex.h
 	PolyVox/VolumeResampler.h
 	PolyVox/VolumeResampler.inl
-	PolyVox/VoxelFilters.h
-	PolyVox/VoxelFilters.inl
 )
 
 SET(IMPL_INC_FILES
+	PolyVox/Impl/Assertions.h
 	PolyVox/Impl/AStarPathfinderImpl.h
     PolyVox/Impl/Config.h
 	PolyVox/Impl/ErrorHandling.h
-	PolyVox/Impl/Logging.h
+	PolyVox/Impl/ExceptionsImpl.h
+	PolyVox/Impl/Interpolation.h
+	PolyVox/Impl/IteratorController.h
+	PolyVox/Impl/IteratorController.inl
+	PolyVox/Impl/LoggingImpl.h
 	PolyVox/Impl/MarchingCubesTables.h
 	PolyVox/Impl/QEF.h
 	PolyVox/Impl/QEF.inl
+	PolyVox/Impl/PlatformDefinitions.h
 	PolyVox/Impl/RandomUnitVectors.h
 	PolyVox/Impl/RandomVectors.h
 	PolyVox/Impl/Timer.h
-	PolyVox/Impl/TypeDef.h
 	PolyVox/Impl/Utility.h
 )
 
@@ -134,8 +133,12 @@ endif(WIN32)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/PolyVoxConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/PolyVoxConfig.cmake @ONLY)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/PolyVoxConfig.cmake DESTINATION ${CONFIG_FILE_DIR} COMPONENT development)
 
+FIND_PACKAGE(Doxygen)
+set_package_properties(Doxygen PROPERTIES URL http://www.doxygen.org DESCRIPTION "API documentation generator" TYPE OPTIONAL PURPOSE "Building the API documentation")
+
 #Documentation
 if(DOXYGEN_FOUND)
+	SET(BUILD_DOCS ON PARENT_SCOPE)
 	#configure_file(${CMAKE_CURRENT_SOURCE_DIR}/polyvox.css ${CMAKE_CURRENT_BINARY_DIR}/polyvox.css)
 	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
 	#This is just the default doc target which only runs Doxygen
@@ -168,4 +171,6 @@ if(DOXYGEN_FOUND)
 			OPTIONAL
 		)
 	endif()
+else()
+	SET(BUILD_DOCS OFF PARENT_SCOPE)
 endif()

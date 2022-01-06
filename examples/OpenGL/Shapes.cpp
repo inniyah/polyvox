@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
+The MIT License (MIT)
 
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
+Copyright (c) 2015 David Williams and Matthew Williams
 
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 *******************************************************************************/
 
 #include "Shapes.h"
@@ -27,7 +28,7 @@ freely, subject to the following restrictions:
 
 using namespace PolyVox;
 
-void createSphereInVolume(PagedVolume<MaterialDensityPair88>& volData, float fRadius, uint8_t uValue)
+void createSphereInVolume(RawVolume<MaterialDensityPair88>& volData, float fRadius, uint8_t uValue)
 {
 	//This vector hold the position of the center of the volume
 	Vector3DInt32 v3dVolCenter = (volData.getEnclosingRegion().getUpperCorner() - volData.getEnclosingRegion().getLowerCorner()) / static_cast<int32_t>(2);
@@ -40,33 +41,33 @@ void createSphereInVolume(PagedVolume<MaterialDensityPair88>& volData, float fRa
 			for (int x = 0; x < volData.getWidth(); x++)
 			{
 				//Store our current position as a vector...
-				Vector3DInt32 v3dCurrentPos(x,y,z);	
+				Vector3DInt32 v3dCurrentPos(x, y, z);
 				//And compute how far the current position is from the center of the volume
 				double fDistToCenter = (v3dCurrentPos - v3dVolCenter).length();
 
 				//If the current voxel is less than 'radius' units from the center
 				//then we make it solid, otherwise we make it empty space.
-				if(fDistToCenter <= fRadius)
+				if (fDistToCenter <= fRadius)
 				{
-					volData.setVoxelAt(x,y,z, MaterialDensityPair88(uValue, uValue > 0 ? MaterialDensityPair88::getMaxDensity() : MaterialDensityPair88::getMinDensity()));
+					volData.setVoxel(x, y, z, MaterialDensityPair88(uValue, uValue > 0 ? MaterialDensityPair88::getMaxDensity() : MaterialDensityPair88::getMinDensity()));
 				}
 			}
 		}
 	}
 }
 
-void createCubeInVolume(PagedVolume<MaterialDensityPair88>& volData, Vector3DInt32 lowerCorner, Vector3DInt32 upperCorner, uint8_t uValue)
+void createCubeInVolume(RawVolume<MaterialDensityPair88>& volData, Vector3DInt32 lowerCorner, Vector3DInt32 upperCorner, uint8_t uValue)
 {
-	uint8_t maxDen = MaterialDensityPair88::getMaxDensity();
-	uint8_t minDen = MaterialDensityPair88::getMinDensity();
+	uint8_t maxDen = static_cast<uint8_t>(MaterialDensityPair88::getMaxDensity());
+	uint8_t minDen = static_cast<uint8_t>(MaterialDensityPair88::getMinDensity());
 	//This three-level for loop iterates over every voxel between the specified corners
 	for (int z = lowerCorner.getZ(); z <= upperCorner.getZ(); z++)
 	{
 		for (int y = lowerCorner.getY(); y <= upperCorner.getY(); y++)
 		{
-			for (int x = lowerCorner.getX() ; x <= upperCorner.getX(); x++)
+			for (int x = lowerCorner.getX(); x <= upperCorner.getX(); x++)
 			{
-				volData.setVoxelAt(x,y,z, MaterialDensityPair88(uValue, uValue > 0 ? maxDen : minDen));
+				volData.setVoxel(x, y, z, MaterialDensityPair88(uValue, uValue > 0 ? maxDen : minDen));
 			}
 		}
 	}

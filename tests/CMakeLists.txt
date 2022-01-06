@@ -1,24 +1,31 @@
-# Copyright (c) 2010-2012 Matt Williams
-# Copyright (c) 2010-2012 David Williams
-# 
-# This software is provided 'as-is', without any express or implied
-# warranty. In no event will the authors be held liable for any damages
-# arising from the use of this software.
-# 
-# Permission is granted to anyone to use this software for any purpose,
-# including commercial applications, and to alter it and redistribute it
-# freely, subject to the following restrictions:
-# 
-# 1. The origin of this software must not be misrepresented; you must not
-# claim that you wrote the original software. If you use this software
-# in a product, an acknowledgment in the product documentation would be
-# appreciated but is not required.
-# 
-# 2. Altered source versions must be plainly marked as such, and must not be
-# misrepresented as being the original software.
-# 
-# 3. This notice may not be removed or altered from any source
-# distribution.
+################################################################################
+# The MIT License (MIT)
+#
+# Copyright (c) 2015 Matthew Williams and David Williams
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+################################################################################
+
+find_package(Qt5Test 5.2)
+
+set_package_properties(Qt5Test PROPERTIES DESCRIPTION "C++ framework" URL http://qt-project.org)
+set_package_properties(Qt5Test PROPERTIES TYPE OPTIONAL PURPOSE "Building the tests")
 
 # Creates a test from the inputs
 #
@@ -66,39 +73,45 @@ IF(BUILD_BINDINGS)
 	ENDIF()
 ENDIF()
 
-# AmbientOcclusionGenerator tests
-CREATE_TEST(TestAmbientOcclusionGenerator.cpp TestAmbientOcclusionGenerator)
-
-# Array tests
-CREATE_TEST(TestArray.cpp TestArray)
-
-# AStarPathfinder tests
-CREATE_TEST(TestAStarPathfinder.cpp TestAStarPathfinder)
-
-CREATE_TEST(TestCubicSurfaceExtractor.cpp TestCubicSurfaceExtractor)
-
-# Low pass filter tests
-CREATE_TEST(TestLowPassFilter.cpp TestLowPassFilter)
-
-# Material tests
-CREATE_TEST(testmaterial.cpp testmaterial)
-
-# Raycast tests
-CREATE_TEST(TestRaycast.cpp TestRaycast)
-
-# Picking tests
-CREATE_TEST(TestPicking.cpp TestPicking)
-
-# Region tests
-CREATE_TEST(TestRegion.cpp TestRegion)
-
-CREATE_TEST(TestSurfaceExtractor.cpp TestSurfaceExtractor)
-
-#Vector tests
-CREATE_TEST(testvector.cpp testvector)
-
-# Volume tests
-CREATE_TEST(testvolume.cpp testvolume)
-
-# Volume subclass tests
-CREATE_TEST(TestVolumeSubclass.cpp TestVolumeSubclass)
+if(Qt5Test_FOUND)
+	SET(BUILD_TESTS ON PARENT_SCOPE)
+	
+	# AmbientOcclusionGenerator tests
+	CREATE_TEST(TestAmbientOcclusionGenerator.cpp TestAmbientOcclusionGenerator)
+	
+	# Array tests
+	CREATE_TEST(TestArray.cpp TestArray)
+	
+	# AStarPathfinder tests
+	CREATE_TEST(TestAStarPathfinder.cpp TestAStarPathfinder)
+	
+	CREATE_TEST(TestCubicSurfaceExtractor.cpp TestCubicSurfaceExtractor)
+	
+	# Low pass filter tests
+	CREATE_TEST(TestLowPassFilter.cpp TestLowPassFilter)
+	
+	# Material tests
+	CREATE_TEST(testmaterial.cpp testmaterial)
+	
+	# Raycast tests
+	CREATE_TEST(TestRaycast.cpp TestRaycast)
+	
+	# Picking tests
+	CREATE_TEST(TestPicking.cpp TestPicking)
+	
+	# Region tests
+	CREATE_TEST(TestRegion.cpp TestRegion)
+	
+	CREATE_TEST(TestSurfaceExtractor.cpp TestSurfaceExtractor)
+	
+	#Vector tests
+	CREATE_TEST(testvector.cpp testvector)
+	
+	# Volume tests
+	CREATE_TEST(testvolume.cpp testvolume)
+	
+	# Volume subclass tests
+	CREATE_TEST(TestVolumeSubclass.cpp TestVolumeSubclass)
+else()
+	SET(BUILD_TESTS OFF PARENT_SCOPE)
+endif()

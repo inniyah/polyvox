@@ -1,31 +1,32 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution.
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #ifndef __PolyVox_AStarPathfinder_H__
 #define __PolyVox_AStarPathfinder_H__
 
 #include "Impl/AStarPathfinderImpl.h"
-#include "Impl/TypeDef.h"
+#include "Impl/PlatformDefinitions.h"
 
 #include <functional>
 #include <list>
@@ -33,48 +34,6 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
-	const float sqrt_1 = 1.0f;
-	const float sqrt_2 = 1.4143f;
-	const float sqrt_3 = 1.7321f;
-
-	const Vector3DInt32 arrayPathfinderFaces[6] =
-	{
-		Vector3DInt32(0, 0, -1),
-		Vector3DInt32(0, 0, +1),
-		Vector3DInt32(0, -1, 0),
-		Vector3DInt32(0, +1, 0),
-		Vector3DInt32(-1, 0, 0),
-		Vector3DInt32(+1, 0, 0)
-	};
-
-	const Vector3DInt32 arrayPathfinderEdges[12] =
-	{
-		Vector3DInt32(0, -1, -1),
-		Vector3DInt32(0, -1, +1),
-		Vector3DInt32(0, +1, -1),
-		Vector3DInt32(0, +1, +1),
-		Vector3DInt32(-1, 0, -1),
-		Vector3DInt32(-1, 0, +1),
-		Vector3DInt32(+1, 0, -1),
-		Vector3DInt32(+1, 0, +1),
-		Vector3DInt32(-1, -1, 0),
-		Vector3DInt32(-1, +1, 0),
-		Vector3DInt32(+1, -1, 0),
-		Vector3DInt32(+1, +1, 0)
-	};
-
-	const Vector3DInt32 arrayPathfinderCorners[8] =
-	{
-		Vector3DInt32(-1, -1, -1),
-		Vector3DInt32(-1, -1, +1),
-		Vector3DInt32(-1, +1, -1),
-		Vector3DInt32(-1, +1, +1),
-		Vector3DInt32(+1, -1, -1),
-		Vector3DInt32(+1, -1, +1),
-		Vector3DInt32(+1, +1, -1),
-		Vector3DInt32(+1, +1, +1)
-	};
-
 	/// This function provides the default method for checking whether a given voxel
 	/// is valid for the path computed by the AStarPathfinder.
 	template<typename VolumeType>
@@ -96,7 +55,7 @@ namespace PolyVox
 	{
 	public:
 		AStarPathfinderParams
-		(
+			(
 			VolumeType* volData,
 			const Vector3DInt32& v3dStart,
 			const Vector3DInt32& v3dEnd,
@@ -104,18 +63,18 @@ namespace PolyVox
 			float fHBias = 1.0,
 			uint32_t uMaxNoOfNodes = 10000,
 			Connectivity requiredConnectivity = TwentySixConnected,
-			std::function<bool (const VolumeType*, const Vector3DInt32&)> funcIsVoxelValidForPath = &aStarDefaultVoxelValidator,
-			std::function<void (float)> funcProgressCallback = nullptr
-		)
+			std::function<bool(const VolumeType*, const Vector3DInt32&)> funcIsVoxelValidForPath = &aStarDefaultVoxelValidator,
+			std::function<void(float)> funcProgressCallback = nullptr
+			)
 			:volume(volData)
-			,start(v3dStart)
-			,end(v3dEnd)
-			,result(listResult)
-			,connectivity(requiredConnectivity)
-			,hBias(fHBias)
-			,maxNumberOfNodes(uMaxNoOfNodes)
-			,isVoxelValidForPath(funcIsVoxelValidForPath)
-			,progressCallback(funcProgressCallback)
+			, start(v3dStart)
+			, end(v3dEnd)
+			, result(listResult)
+			, connectivity(requiredConnectivity)
+			, hBias(fHBias)
+			, maxNumberOfNodes(uMaxNoOfNodes)
+			, isVoxelValidForPath(funcIsVoxelValidForPath)
+			, progressCallback(funcProgressCallback)
 		{
 		}
 
@@ -124,7 +83,7 @@ namespace PolyVox
 
 		/// The start point for the pathfinding algorithm.
 		Vector3DInt32 start;
-		
+
 		/// The end point for the pathfinding algorithm.
 		Vector3DInt32 end;
 
@@ -159,14 +118,14 @@ namespace PolyVox
 		/// you could check to ensure that the voxel above is empty and the voxel below is solid.
 		///
 		/// \sa aStarDefaultVoxelValidator
-		std::function<bool (const VolumeType*, const Vector3DInt32&)> isVoxelValidForPath;
+		std::function<bool(const VolumeType*, const Vector3DInt32&)> isVoxelValidForPath;
 
 		/// This function is called by the AStarPathfinder to report on its progress in getting to
 		/// the goal. The progress is reported by computing the distance from the closest node found
 		/// so far to the end node, and comparing this with the distance from the start node to the
 		/// end node. This progress value is guarenteed to never decrease, but it may stop increasing
 		///for short periods of time. It may even stop increasing altogether if a path cannot be found.
-		std::function<void (float)> progressCallback;
+		std::function<void(float)> progressCallback;
 	};
 
 	/// The AStarPathfinder compute a path from one point in the volume to another.
@@ -217,13 +176,13 @@ namespace PolyVox
 
 		//The current node
 		AllNodesContainer::iterator current;
-		
+
 		float m_fProgress;
 
 		AStarPathfinderParams<VolumeType> m_params;
 	};
 }
 
-#include "PolyVox/AStarPathfinder.inl"
+#include "AStarPathfinder.inl"
 
 #endif //__PolyVox_AStarPathfinder_H__

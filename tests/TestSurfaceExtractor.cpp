@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2010 Matt Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution.
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 Matthew Williams and David Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #include "TestSurfaceExtractor.h"
@@ -103,10 +104,8 @@ VolumeType* createAndFillVolume(void)
 {
 	const int32_t uVolumeSideLength = 64;
 
-	FilePager<typename VolumeType::VoxelType>* pager = new FilePager<typename VolumeType::VoxelType>(".");
-
 	//Create empty volume
-	VolumeType* volData = new VolumeType(Region(Vector3DInt32(0, 0, 0), Vector3DInt32(uVolumeSideLength - 1, uVolumeSideLength - 1, uVolumeSideLength - 1)), pager);
+	VolumeType* volData = new VolumeType(Region(0, 0, 0, uVolumeSideLength - 1, uVolumeSideLength - 1, uVolumeSideLength - 1));
 
 	// Fill
 	for (int32_t z = 0; z < uVolumeSideLength; z++)
@@ -120,7 +119,7 @@ VolumeType* createAndFillVolume(void)
 				typename VolumeType::VoxelType voxelValue;
 				writeDensityValueToVoxel<typename VolumeType::VoxelType>(x + y + z, voxelValue);
 				writeMaterialValueToVoxel<typename VolumeType::VoxelType>(z > uVolumeSideLength / 2 ? 42 : 79, voxelValue);
-				volData->setVoxelAt(x, y, z, voxelValue);
+				volData->setVoxel(x, y, z, voxelValue);
 			}
 		}
 	}
@@ -129,28 +128,28 @@ VolumeType* createAndFillVolume(void)
 }
 
 template <typename VolumeType>
-VolumeType* createAndFillVolumeWithNoise(int32_t iVolumeSideLength, float minValue, float maxValue)
+VolumeType* createAndFillVolumeWithNoise(int32_t iVolumeWidthAndHeight, int32_t iVolumeDepth, float minValue, float maxValue)
 {
 	FilePager<float>* pager = new FilePager<float>(".");
 
 	//Create empty volume
-	VolumeType* volData = new VolumeType(Region(Vector3DInt32(0, 0, 0), Vector3DInt32(iVolumeSideLength - 1, iVolumeSideLength - 1, iVolumeSideLength - 1)), pager);
+	VolumeType* volData = new VolumeType(pager);
 
 	// Set up a random number generator
 	std::mt19937 rng;
 
 	// Fill
-	for (int32_t z = 0; z < iVolumeSideLength; z++)
+	for (int32_t z = 0; z < iVolumeDepth; z++)
 	{
-		for (int32_t y = 0; y < iVolumeSideLength; y++)
+		for (int32_t y = 0; y < iVolumeWidthAndHeight; y++)
 		{
-			for (int32_t x = 0; x < iVolumeSideLength; x++)
+			for (int32_t x = 0; x < iVolumeWidthAndHeight; x++)
 			{
 				// We can't use std distributions because they vary between platforms (breaking tests)
 				float voxelValue = static_cast<float>(rng()) / static_cast<float>(std::numeric_limits<int32_t>::max()); // Float in range 0.0 to 1.0
 				voxelValue = voxelValue	* (maxValue - minValue) + minValue; // Float in range minValue to maxValue
 
-				volData->setVoxelAt(x, y, z, voxelValue);
+				volData->setVoxel(x, y, z, voxelValue);
 			}
 		}
 	}
@@ -168,65 +167,65 @@ void TestSurfaceExtractor::testBehaviour()
 	// Of course, the use of a custom controller will also make a significant diference, but this probably does need investigating further in the future.
 
 	// This basic test just uses the default controller and automatically generates a mesh of the appropriate type.
-	auto uintVol = createAndFillVolume< PagedVolume<uint8_t> >();
+	auto uintVol = createAndFillVolume< RawVolume<uint8_t> >();
 	auto uintMesh = extractMarchingCubesMesh(uintVol, uintVol->getEnclosingRegion());
-	QCOMPARE(uintMesh.getNoOfVertices(), uint32_t(12096)); // Verifies size of mesh and that we have 32-bit indices
+	QCOMPARE(uintMesh.getNoOfVertices(), uint32_t(6048)); // Verifies size of mesh and that we have 32-bit indices
 	QCOMPARE(uintMesh.getNoOfIndices(), uint32_t(35157)); // Verifies size of mesh
-	QCOMPARE(uintMesh.getIndex(100), uint32_t(44)); // Verifies that we have 32-bit indices
+	QCOMPARE(uintMesh.getIndex(100), uint32_t(24)); // Verifies that we have 32-bit indices
 	QCOMPARE(uintMesh.getVertex(100).data, uint8_t(1)); // Not really meaningful for a primative type
 
 	// This test makes use of a custom controller
-	auto floatVol = createAndFillVolume< PagedVolume<float> >();
+	auto floatVol = createAndFillVolume< RawVolume<float> >();
 	CustomMarchingCubesController floatCustomController;
 	auto floatMesh = extractMarchingCubesMesh(floatVol, floatVol->getEnclosingRegion(), floatCustomController);
-	QCOMPARE(floatMesh.getNoOfVertices(), uint32_t(16113)); // Verifies size of mesh and that we have 32-bit indices
+	QCOMPARE(floatMesh.getNoOfVertices(), uint32_t(3825)); // Verifies size of mesh and that we have 32-bit indices
 	QCOMPARE(floatMesh.getNoOfIndices(), uint32_t(22053)); // Verifies size of mesh
-	QCOMPARE(floatMesh.getIndex(100), uint32_t(26)); // Verifies that we have 32-bit indices
+	QCOMPARE(floatMesh.getIndex(100), uint32_t(119)); // Verifies that we have 32-bit indices
 	QCOMPARE(floatMesh.getVertex(100).data, float(1.0f)); // Not really meaningful for a primative type
 
 	// This test makes use of a user provided mesh. It uses the default controller, but we have to explicitly provide this because C++ won't let us
 	// use a default for the second-to-last parameter but noot use a default for the last parameter.
-	auto intVol = createAndFillVolume< PagedVolume<int8_t> >();
+	auto intVol = createAndFillVolume< RawVolume<int8_t> >();
 	Mesh< MarchingCubesVertex< int8_t >, uint16_t > intMesh;
 	extractMarchingCubesMeshCustom(intVol, intVol->getEnclosingRegion(), &intMesh);
-	QCOMPARE(intMesh.getNoOfVertices(), uint16_t(11718)); // Verifies size of mesh and that we have 16-bit indices
+	QCOMPARE(intMesh.getNoOfVertices(), uint16_t(5859)); // Verifies size of mesh and that we have 16-bit indices
 	QCOMPARE(intMesh.getNoOfIndices(), uint32_t(34041)); // Verifies size of mesh
 	QCOMPARE(intMesh.getIndex(100), uint16_t(29)); // Verifies that we have 16-bit indices
 	QCOMPARE(intMesh.getVertex(100).data, int8_t(1)); // Not really meaningful for a primative type
 
 	// This test makes use of a user-provided mesh and also a custom controller.
-	auto doubleVol = createAndFillVolume< PagedVolume<double> >();
+	auto doubleVol = createAndFillVolume< RawVolume<double> >();
 	CustomMarchingCubesController doubleCustomController;
 	Mesh< MarchingCubesVertex< double >, uint16_t > doubleMesh;
 	extractMarchingCubesMeshCustom(doubleVol, doubleVol->getEnclosingRegion(), &doubleMesh, doubleCustomController);
-	QCOMPARE(doubleMesh.getNoOfVertices(), uint16_t(16113)); // Verifies size of mesh and that we have 32-bit indices
+	QCOMPARE(doubleMesh.getNoOfVertices(), uint16_t(3825)); // Verifies size of mesh and that we have 32-bit indices
 	QCOMPARE(doubleMesh.getNoOfIndices(), uint32_t(22053)); // Verifies size of mesh
-	QCOMPARE(doubleMesh.getIndex(100), uint16_t(26)); // Verifies that we have 32-bit indices
+	QCOMPARE(doubleMesh.getIndex(100), uint16_t(119)); // Verifies that we have 32-bit indices
 	QCOMPARE(doubleMesh.getVertex(100).data, double(1.0f)); // Not really meaningful for a primative type
 
 	// This test ensures the extractor works on a non-primitive voxel type.
-	auto materialVol = createAndFillVolume< PagedVolume<MaterialDensityPair88> >();
+	auto materialVol = createAndFillVolume< RawVolume<MaterialDensityPair88> >();
 	auto materialMesh = extractMarchingCubesMesh(materialVol, materialVol->getEnclosingRegion());
-	QCOMPARE(materialMesh.getNoOfVertices(), uint32_t(12096)); // Verifies size of mesh and that we have 32-bit indices
+	QCOMPARE(materialMesh.getNoOfVertices(), uint32_t(6048)); // Verifies size of mesh and that we have 32-bit indices
 	QCOMPARE(materialMesh.getNoOfIndices(), uint32_t(35157)); // Verifies size of mesh
-	QCOMPARE(materialMesh.getIndex(100), uint32_t(44)); // Verifies that we have 32-bit indices
+	QCOMPARE(materialMesh.getIndex(100), uint32_t(24)); // Verifies that we have 32-bit indices
 	QCOMPARE(materialMesh.getVertex(100).data.getMaterial(), uint16_t(79)); // Verify the data attached to the vertex
 }
 
 void TestSurfaceExtractor::testEmptyVolumePerformance()
 {
-	auto emptyVol = createAndFillVolumeWithNoise< PagedVolume<float> >(128, -2.0f, -1.0f);
+	auto emptyVol = createAndFillVolumeWithNoise< PagedVolume<float> >(128, 512, -2.0f, -1.0f);
 	Mesh< MarchingCubesVertex< float >, uint16_t > emptyMesh;
-	QBENCHMARK{ extractMarchingCubesMeshCustom(emptyVol, Region(32, 32, 32, 63, 63, 63), &emptyMesh); }
+	QBENCHMARK{ extractMarchingCubesMeshCustom(emptyVol, Region(8, 8, 8, 119, 119, 503), &emptyMesh); }
 	QCOMPARE(emptyMesh.getNoOfVertices(), uint16_t(0));
 }
 
 void TestSurfaceExtractor::testNoiseVolumePerformance()
 {
-	auto noiseVol = createAndFillVolumeWithNoise< PagedVolume<float> >(128, -1.0f, 1.0f);
+	auto noiseVol = createAndFillVolumeWithNoise< PagedVolume<float> >(128, 128, -1.0f, 1.0f);
 	Mesh< MarchingCubesVertex< float >, uint16_t > noiseMesh;
 	QBENCHMARK{ extractMarchingCubesMeshCustom(noiseVol, Region(32, 32, 32, 63, 63, 63), &noiseMesh); }
-	QCOMPARE(noiseMesh.getNoOfVertices(), uint16_t(36755));
+	QCOMPARE(noiseMesh.getNoOfVertices(), uint16_t(35672));
 }
 
 QTEST_MAIN(TestSurfaceExtractor)

@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 namespace PolyVox
@@ -52,20 +53,20 @@ namespace PolyVox
 	//  It should simply read "if (ty <= tz)".
 	//
 	//	This error was reported by Joey Hammer (PixelActive).
-	
+
 	/**
 	 * Cast a ray through a volume by specifying the start and end positions
-	 * 
+	 *
 	 * The ray will move from \a v3dStart to \a v3dEnd, calling \a callback for each
 	 * voxel it passes through until \a callback returns \a false. In this case it
 	 * returns a RaycastResults::Interupted. If it passes from start to end
 	 * without \a callback returning \a false, it returns RaycastResults::Completed.
-	 * 
+	 *
 	 * \param volData The volume to pass the ray though
 	 * \param v3dStart The start position in the volume
 	 * \param v3dEnd The end position in the volume
 	 * \param callback The callback to call for each voxel
-	 * 
+	 *
 	 * \return A RaycastResults designating whether the ray hit anything or not
 	 */
 	template<typename VolumeType, typename Callback>
@@ -82,7 +83,7 @@ namespace PolyVox
 		const float x2 = v3dEnd.getX() + 0.5f;
 		const float y2 = v3dEnd.getY() + 0.5f;
 		const float z2 = v3dEnd.getZ() + 0.5f;
-		
+
 		int i = (int)floorf(x1);
 		int j = (int)floorf(y1);
 		int k = (int)floorf(z1);
@@ -106,39 +107,41 @@ namespace PolyVox
 		const float minz = floorf(z1), maxz = minz + 1.0f;
 		float tz = ((z1 > z2) ? (z1 - minz) : (maxz - z1)) * deltatz;
 
-		sampler.setPosition(i,j,k);
+		sampler.setPosition(i, j, k);
 
-		for(;;)
+		for (;;)
 		{
-			if(!callback(sampler))
+			if (!callback(sampler))
 			{
 				return RaycastResults::Interupted;
 			}
 
-			if(tx <= ty && tx <= tz)
+			if (tx <= ty && tx <= tz)
 			{
-				if(i == iend) break;
+				if (i == iend) break;
 				tx += deltatx;
 				i += di;
 
-				if(di == 1) sampler.movePositiveX();
-				if(di == -1) sampler.moveNegativeX();
-			} else if (ty <= tz)
+				if (di == 1) sampler.movePositiveX();
+				if (di == -1) sampler.moveNegativeX();
+			}
+			else if (ty <= tz)
 			{
-				if(j == jend) break;
+				if (j == jend) break;
 				ty += deltaty;
 				j += dj;
 
-				if(dj == 1) sampler.movePositiveY();
-				if(dj == -1) sampler.moveNegativeY();
-			} else 
+				if (dj == 1) sampler.movePositiveY();
+				if (dj == -1) sampler.moveNegativeY();
+			}
+			else
 			{
-				if(k == kend) break;
+				if (k == kend) break;
 				tz += deltatz;
 				k += dk;
 
-				if(dk == 1) sampler.movePositiveZ();
-				if(dk == -1) sampler.moveNegativeZ();
+				if (dk == 1) sampler.movePositiveZ();
+				if (dk == -1) sampler.moveNegativeZ();
 			}
 		}
 
@@ -147,13 +150,13 @@ namespace PolyVox
 
 	/**
 	 * Cast a ray through a volume by specifying the start and a direction
-	 * 
-	 * The ray will move from \a v3dStart along \a v3dDirectionAndLength, calling 
-	 * \a callback for each voxel it passes through until \a callback returns 
-	 * \a false. In this case it returns a RaycastResults::Interupted. If it 
-	 * passes from start to end without \a callback returning \a false, it 
+	 *
+	 * The ray will move from \a v3dStart along \a v3dDirectionAndLength, calling
+	 * \a callback for each voxel it passes through until \a callback returns
+	 * \a false. In this case it returns a RaycastResults::Interupted. If it
+	 * passes from start to end without \a callback returning \a false, it
 	 * returns RaycastResults::Completed.
-	 * 
+	 *
 	 * \note These has been confusion in the past with people not realising
 	 * that the length of the direction vector is important. Most graphics API can provide
 	 * a camera position and view direction for picking purposes, but the view direction is
@@ -161,12 +164,12 @@ namespace PolyVox
 	 * will only iterate over a single voxel and won't find what you are looking for. Instead
 	 * you must scale the direction vector so that it's length represents the maximum distance
 	 * over which you want the ray to be cast.
-	 * 
+	 *
 	 * \param volData The volume to pass the ray though
 	 * \param v3dStart The start position in the volume
 	 * \param v3dDirectionAndLength The direction and length of the ray
 	 * \param callback The callback to call for each voxel
-	 * 
+	 *
 	 * \return A RaycastResults designating whether the ray hit anything or not
 	 */
 	template<typename VolumeType, typename Callback>

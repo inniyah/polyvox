@@ -1,24 +1,26 @@
-# Copyright (c) 2007-2012 Matt Williams
-# Copyright (c) 2007-2012 David Williams
-# 
-# This software is provided 'as-is', without any express or implied
-# warranty. In no event will the authors be held liable for any damages
-# arising from the use of this software.
-# 
-# Permission is granted to anyone to use this software for any purpose,
-# including commercial applications, and to alter it and redistribute it
-# freely, subject to the following restrictions:
-# 
-# 1. The origin of this software must not be misrepresented; you must not
-# claim that you wrote the original software. If you use this software
-# in a product, an acknowledgment in the product documentation would be
-# appreciated but is not required.
-# 
-# 2. Altered source versions must be plainly marked as such, and must not be
-# misrepresented as being the original software.
-# 
-# 3. This notice may not be removed or altered from any source
-# distribution.
+################################################################################
+# The MIT License (MIT)
+#
+# Copyright (c) 2015 Matthew Williams and David Williams
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+################################################################################
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8.6)
 
@@ -33,43 +35,19 @@ MARK_AS_ADVANCED(FORCE POLYVOX_VERSION)
 SET_PROPERTY(GLOBAL PROPERTY USE_FOLDERS ON)
 include(FeatureSummary)
 
-FIND_PACKAGE(Doxygen)
-OPTION(ENABLE_EXAMPLES "Should the examples be built" ON)
-
-SET(LIBRARY_TYPE "DYNAMIC" CACHE STRING "Should the library be STATIC or DYNAMIC")
-SET_PROPERTY(CACHE LIBRARY_TYPE PROPERTY STRINGS DYNAMIC STATIC)
-IF(WIN32)
-	SET(LIBRARY_TYPE "STATIC")
-ENDIF()
-
-# Qt is required for building the tests, the example and optionally for bundling the documentation
-find_package(Qt5Test 5.2)
-find_package(Qt5OpenGL 5.2)
-
-set_package_properties(Doxygen PROPERTIES URL http://www.doxygen.org DESCRIPTION "API documentation generator" TYPE OPTIONAL PURPOSE "Building the API documentation")
-set_package_properties(Qt5Test PROPERTIES DESCRIPTION "C++ framework" URL http://qt-project.org)
-set_package_properties(Qt5Test PROPERTIES TYPE OPTIONAL PURPOSE "Building the tests")
-set_package_properties(Qt5OpenGL PROPERTIES DESCRIPTION "C++ framework" URL http://qt-project.org)
-set_package_properties(Qt5OpenGL PROPERTIES TYPE RECOMMENDED PURPOSE "Building the examples")
-
-IF(CMAKE_COMPILER_IS_GNUCXX) #Maybe "OR MINGW"
+IF(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang") #Maybe "OR MINGW"
 	ADD_DEFINITIONS(-std=c++0x) #Enable C++0x mode
 ENDIF()
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-	ADD_DEFINITIONS(-std=c++0x) #Enable C++0x mode
-endif()
+
+IF(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+	ADD_DEFINITIONS(-D_CRT_SECURE_NO_WARNINGS)
+ENDIF()
 
 ADD_SUBDIRECTORY(include)
 
 OPTION(ENABLE_EXAMPLES "Should the examples be built" ON)
-IF(ENABLE_EXAMPLES AND Qt5OpenGL_FOUND)
-	ADD_SUBDIRECTORY(examples/Basic)
-	ADD_SUBDIRECTORY(examples/Paging)
-	ADD_SUBDIRECTORY(examples/OpenGL)
-	ADD_SUBDIRECTORY(examples/SmoothLOD)
-	ADD_SUBDIRECTORY(examples/DecodeOnGPU)
-	ADD_SUBDIRECTORY(examples/Python)
-	SET(BUILD_EXAMPLES ON)
+IF(ENABLE_EXAMPLES)
+	ADD_SUBDIRECTORY(examples)
 ELSE()
 	SET(BUILD_EXAMPLES OFF)
 ENDIF()
@@ -77,20 +55,12 @@ ENDIF()
 INCLUDE(Packaging.cmake)
 
 OPTION(ENABLE_TESTS "Should the tests be built" ON)
-IF(ENABLE_TESTS AND Qt5Test_FOUND)
+IF(ENABLE_TESTS)
 	INCLUDE(CTest)
 	MARK_AS_ADVANCED(FORCE BUILD_TESTING)
 	ADD_SUBDIRECTORY(tests)
-	SET(BUILD_TESTS ON)
 ELSE()
 	SET(BUILD_TESTS OFF)
-ENDIF()
-
-#Check if we will building _and_ bundling the docs
-IF(DOXYGEN_FOUND AND QT_QCOLLECTIONGENERATOR_EXECUTABLE)
-	SET(BUILD_AND_BUNDLE_DOCS ON)
-ELSE()
-	SET(BUILD_AND_BUNDLE_DOCS OFF)
 ENDIF()
 
 ADD_SUBDIRECTORY(documentation)
@@ -100,8 +70,7 @@ ADD_SUBDIRECTORY(bindings)
 add_feature_info("Examples" BUILD_EXAMPLES "Examples of PolyVox usage")
 add_feature_info("Tests" BUILD_TESTS "Unit tests")
 add_feature_info("Bindings" BUILD_BINDINGS "SWIG bindings")
-add_feature_info("API docs" DOXYGEN_FOUND "HTML documentation of the API")
-add_feature_info("Qt Help" BUILD_AND_BUNDLE_DOCS "API docs in Qt Help format")
+add_feature_info("API docs" BUILD_DOCS "HTML documentation of the API")
 add_feature_info("Manual" BUILD_MANUAL "HTML user's manual")
 
 feature_summary(WHAT ALL)
@@ -110,11 +79,9 @@ feature_summary(WHAT ALL)
 MESSAGE(STATUS "")
 MESSAGE(STATUS "Summary")
 MESSAGE(STATUS "-------")
-MESSAGE(STATUS "Library type:        " ${LIBRARY_TYPE})
 MESSAGE(STATUS "Build examples:      " ${BUILD_EXAMPLES})
 MESSAGE(STATUS "Build tests:         " ${BUILD_TESTS})
 MESSAGE(STATUS "Build bindings:      " ${BUILD_BINDINGS})
-MESSAGE(STATUS "API Docs available:  " ${DOXYGEN_FOUND})
-MESSAGE(STATUS " - Qt Help bundling: " ${BUILD_AND_BUNDLE_DOCS})
+MESSAGE(STATUS "API Docs available:  " ${BUILD_DOCS})
 MESSAGE(STATUS "Build manual:        " ${BUILD_MANUAL})
 MESSAGE(STATUS "")

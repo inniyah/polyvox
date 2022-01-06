@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2010 Matt Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution.
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 Matthew Williams and David Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #include "TestLowPassFilter.h"
@@ -35,7 +36,7 @@ void TestLowPassFilter::testExecute()
 {
 	const int32_t g_uVolumeSideLength = 8;
 
-	Region reg(Vector3DInt32(0,0,0), Vector3DInt32(g_uVolumeSideLength-1, g_uVolumeSideLength-1, g_uVolumeSideLength-1));
+	Region reg(Vector3DInt32(0, 0, 0), Vector3DInt32(g_uVolumeSideLength - 1, g_uVolumeSideLength - 1, g_uVolumeSideLength - 1));
 
 	//Create empty volume
 	RawVolume<Density8> volData(reg);
@@ -47,10 +48,10 @@ void TestLowPassFilter::testExecute()
 		{
 			for (int32_t x = 0; x < g_uVolumeSideLength; x++)
 			{
-				if(x % 2 == 0)
+				if (x % 2 == 0)
 				{
 					Density8 voxel(32);
-					volData.setVoxelAt(x, y, z, voxel);
+					volData.setVoxel(x, y, z, voxel);
 				}
 			}
 		}
@@ -61,30 +62,30 @@ void TestLowPassFilter::testExecute()
 	LowPassFilter< RawVolume<Density8>, RawVolume<Density8>, Density16 > lowPassfilter(&volData, reg, &resultVolume, reg, 3);
 
 	//Test the normal implementation
-	QBENCHMARK {
+	QBENCHMARK{
 		lowPassfilter.execute();
 	}
-	QCOMPARE(resultVolume.getVoxel(0,0,0), Density8(4));
-	QCOMPARE(resultVolume.getVoxel(1,1,1), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(2,2,2), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(3,3,3), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(4,4,4), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(5,5,5), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(6,6,6), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(7,7,7), Density8(4));
+	QCOMPARE(resultVolume.getVoxel(0, 0, 0), Density8(4));
+	QCOMPARE(resultVolume.getVoxel(1, 1, 1), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(2, 2, 2), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(3, 3, 3), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(4, 4, 4), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(5, 5, 5), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(6, 6, 6), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(7, 7, 7), Density8(4));
 
 	//Test the SAT implmentation
-	QBENCHMARK {
+	QBENCHMARK{
 		lowPassfilter.executeSAT();
 	}
-	QCOMPARE(resultVolume.getVoxel(0,0,0), Density8(4));
-	QCOMPARE(resultVolume.getVoxel(1,1,1), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(2,2,2), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(3,3,3), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(4,4,4), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(5,5,5), Density8(21));
-	QCOMPARE(resultVolume.getVoxel(6,6,6), Density8(10));
-	QCOMPARE(resultVolume.getVoxel(7,7,7), Density8(4));
+	QCOMPARE(resultVolume.getVoxel(0, 0, 0), Density8(4));
+	QCOMPARE(resultVolume.getVoxel(1, 1, 1), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(2, 2, 2), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(3, 3, 3), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(4, 4, 4), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(5, 5, 5), Density8(21));
+	QCOMPARE(resultVolume.getVoxel(6, 6, 6), Density8(10));
+	QCOMPARE(resultVolume.getVoxel(7, 7, 7), Density8(4));
 }
 
 QTEST_MAIN(TestLowPassFilter)

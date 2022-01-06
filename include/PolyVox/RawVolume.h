@@ -1,32 +1,33 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #ifndef __PolyVox_RawVolume_H__
 #define __PolyVox_RawVolume_H__
 
-#include "PolyVox/BaseVolume.h"
-#include "PolyVox/Region.h"
-#include "PolyVox/Vector.h"
+#include "BaseVolume.h"
+#include "Region.h"
+#include "Vector.h"
 
 #include <cstdlib> //For abort()
 #include <limits>
@@ -35,11 +36,17 @@ freely, subject to the following restrictions:
 
 namespace PolyVox
 {
+	/**
+	 * Simple volume implementation which stores data in a single large 3D array.
+	 *
+	 * This class is less memory-efficient than the PagedVolume, but it is the simplest possible
+	 * volume implementation which makes it useful for debugging and getting started with PolyVox.
+	 */
 	template <typename VoxelType>
 	class RawVolume : public BaseVolume<VoxelType>
 	{
 	public:
-		#ifndef SWIG
+#ifndef SWIG
 		//There seems to be some descrepency between Visual Studio and GCC about how the following class should be declared.
 		//There is a work around (see also See http://goo.gl/qu1wn) given below which appears to work on VS2010 and GCC, but
 		//which seems to cause internal compiler errors on VS2008 when building with the /Gm 'Enable Minimal Rebuild' compiler
@@ -50,14 +57,16 @@ namespace PolyVox
 #if defined(_MSC_VER)
 		class Sampler : public BaseVolume<VoxelType>::Sampler< RawVolume<VoxelType> > //This line works on VS2010
 #else
-                class Sampler : public BaseVolume<VoxelType>::template Sampler< RawVolume<VoxelType> > //This line works on GCC
+		class Sampler : public BaseVolume<VoxelType>::template Sampler< RawVolume<VoxelType> > //This line works on GCC
 #endif
 		{
 		public:
 			Sampler(RawVolume<VoxelType>* volume);
 			~Sampler();
 
-			inline VoxelType getVoxel(void) const;			
+			inline VoxelType getVoxel(void) const;
+
+			bool isCurrentPositionValid(void) const;
 
 			void setPosition(const Vector3DInt32& v3dNewPos);
 			void setPosition(int32_t xPos, int32_t yPos, int32_t zPos);
@@ -105,8 +114,14 @@ namespace PolyVox
 
 			//Other current position information
 			VoxelType* mCurrentVoxel;
+
+			//Whether the current position is inside the volume
+			//FIXME - Replace these with flags
+			bool m_bIsCurrentPositionValidInX;
+			bool m_bIsCurrentPositionValidInY;
+			bool m_bIsCurrentPositionValidInZ;
 		};
-		#endif
+#endif // SWIG
 
 	public:
 		/// Constructor for creating a fixed size volume.
@@ -115,31 +130,29 @@ namespace PolyVox
 		/// Destructor
 		~RawVolume();
 
-		/// Gets a voxel at the position given by <tt>x,y,z</tt> coordinates
-		template <WrapMode eWrapMode>
-		VoxelType getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tBorder = VoxelType()) const;
-		/// Gets a voxel at the position given by a 3D vector
-		template <WrapMode eWrapMode>
-		VoxelType getVoxel(const Vector3DInt32& v3dPos, VoxelType tBorder = VoxelType()) const;
+		/// Gets the value used for voxels which are outside the volume
+		VoxelType getBorderValue(void) const;
+		/// Gets a Region representing the extents of the Volume.
+		const Region& getEnclosingRegion(void) const;
+
+		/// Gets the width of the volume in voxels.
+		int32_t getWidth(void) const;
+		/// Gets the height of the volume in voxels.
+		int32_t getHeight(void) const;
+		/// Gets the depth of the volume in voxels.
+		int32_t getDepth(void) const;
 
 		/// Gets a voxel at the position given by <tt>x,y,z</tt> coordinates
-		VoxelType getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapMode eWrapMode = WrapModes::Validate, VoxelType tBorder = VoxelType()) const;
+		VoxelType getVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos) const;
 		/// Gets a voxel at the position given by a 3D vector
-		VoxelType getVoxel(const Vector3DInt32& v3dPos, WrapMode eWrapMode = WrapModes::Validate, VoxelType tBorder = VoxelType()) const;
+		VoxelType getVoxel(const Vector3DInt32& v3dPos) const;
 
-		/// Gets a voxel at the position given by <tt>x,y,z</tt> coordinates
-		POLYVOX_DEPRECATED VoxelType getVoxelAt(int32_t uXPos, int32_t uYPos, int32_t uZPos) const;
-		/// Gets a voxel at the position given by a 3D vector
-		POLYVOX_DEPRECATED VoxelType getVoxelAt(const Vector3DInt32& v3dPos) const;
-
+		/// Sets the value used for voxels which are outside the volume
+		void setBorderValue(const VoxelType& tBorder);
 		/// Sets the voxel at the position given by <tt>x,y,z</tt> coordinates
-		void setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue, WrapMode eWrapMode = WrapModes::Validate);
+		void setVoxel(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue);
 		/// Sets the voxel at the position given by a 3D vector
-		void setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue, WrapMode eWrapMode = WrapModes::Validate);
-		/// Sets the voxel at the position given by <tt>x,y,z</tt> coordinates
-		bool setVoxelAt(int32_t uXPos, int32_t uYPos, int32_t uZPos, VoxelType tValue);
-		/// Sets the voxel at the position given by a 3D vector
-		bool setVoxelAt(const Vector3DInt32& v3dPos, VoxelType tValue);
+		void setVoxel(const Vector3DInt32& v3dPos, VoxelType tValue);
 
 		/// Calculates approximatly how many bytes of memory the volume is currently using.
 		uint32_t calculateSizeInBytes(void);
@@ -154,20 +167,18 @@ namespace PolyVox
 	private:
 		void initialise(const Region& regValidRegion);
 
-		// A trick to implement specialization of template member functions in template classes. See http://stackoverflow.com/a/4951057
-		template <WrapMode eWrapMode>
-		VoxelType getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<eWrapMode>, VoxelType tBorder) const;
-		VoxelType getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Validate>, VoxelType tBorder) const;
-		VoxelType getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Clamp>, VoxelType tBorder) const;
-		VoxelType getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::Border>, VoxelType tBorder) const;
-		VoxelType getVoxelImpl(int32_t uXPos, int32_t uYPos, int32_t uZPos, WrapModeType<WrapModes::AssumeValid>, VoxelType tBorder) const;
+		//The size of the volume
+		Region m_regValidRegion;
+
+		//The border value
+		VoxelType m_tBorderValue;
 
 		//The voxel data
 		VoxelType* m_pData;
 	};
 }
 
-#include "PolyVox/RawVolume.inl"
-#include "PolyVox/RawVolumeSampler.inl"
+#include "RawVolume.inl"
+#include "RawVolumeSampler.inl"
 
 #endif //__PolyVox_RawVolume_H__

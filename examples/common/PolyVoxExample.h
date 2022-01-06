@@ -1,24 +1,25 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
+The MIT License (MIT)
 
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
+Copyright (c) 2015 David Williams and Matthew Williams
 
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-1. The origin of this software must not be misrepresented; you must not
-claim that you wrote the original software. If you use this software
-in a product, an acknowledgment in the product documentation would be
-appreciated but is not required.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-2. Altered source versions must be plainly marked as such, and must not be
-misrepresented as being the original software.
-
-3. This notice may not be removed or altered from any source
-distribution.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 *******************************************************************************/
 
 #ifndef __PolyVoxExample_H__
@@ -62,10 +63,6 @@ public:
 	template <typename MeshType>
 	void addMesh(const MeshType& surfaceMesh, const PolyVox::Vector3DInt32& translation = PolyVox::Vector3DInt32(0, 0, 0), float scale = 1.0f)
 	{
-		// Convienient access to the vertices and indices
-		const auto& vecIndices = surfaceMesh.getIndices();
-		const auto& vecVertices = surfaceMesh.getVertices();
-
 		// This struct holds the OpenGL properties (buffer handles, etc) which will be used
 		// to render our mesh. We copy the data from the PolyVox mesh into this structure.
 		OpenGLMeshData meshData;
@@ -77,12 +74,12 @@ public:
 		// The GL_ARRAY_BUFFER will contain the list of vertex positions
 		glGenBuffers(1, &(meshData.vertexBuffer));
 		glBindBuffer(GL_ARRAY_BUFFER, meshData.vertexBuffer);
-		glBufferData(GL_ARRAY_BUFFER, vecVertices.size() * sizeof(typename MeshType::VertexType), vecVertices.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, surfaceMesh.getNoOfVertices() * sizeof(typename MeshType::VertexType), surfaceMesh.getRawVertexData(), GL_STATIC_DRAW);
 
 		// and GL_ELEMENT_ARRAY_BUFFER will contain the indices
 		glGenBuffers(1, &(meshData.indexBuffer));
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshData.indexBuffer);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, vecIndices.size() * sizeof(typename MeshType::IndexType), vecIndices.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaceMesh.getNoOfIndices() * sizeof(typename MeshType::IndexType), surfaceMesh.getRawIndexData(), GL_STATIC_DRAW);
 
 		// Every surface extractor outputs valid positions for the vertices, so tell OpenGL how these are laid out
 		glEnableVertexAttribArray(0); // Attrib '0' is the vertex positions
@@ -105,7 +102,7 @@ public:
 		glBindVertexArray(0);
 
 		// A few additional properties can be copied across for use during rendering.
-		meshData.noOfIndices = vecIndices.size();
+		meshData.noOfIndices = surfaceMesh.getNoOfIndices();
 		meshData.translation = QVector3D(translation.getX(), translation.getY(), translation.getZ());
 		meshData.scale = scale;
 

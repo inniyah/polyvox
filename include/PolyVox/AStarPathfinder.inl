@@ -1,30 +1,76 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution.
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
-#include "PolyVox/Impl/ErrorHandling.h"
+#include "Impl/ErrorHandling.h"
 
 namespace PolyVox
 {
+	////////////////////////////////////////////////////////////////////////////////
+	// Useful constants
+	////////////////////////////////////////////////////////////////////////////////
+	const float sqrt_1 = 1.0f;
+	const float sqrt_2 = 1.4143f;
+	const float sqrt_3 = 1.7321f;
+
+	const Vector3DInt32 arrayPathfinderFaces[6] =
+	{
+		Vector3DInt32(0, 0, -1),
+		Vector3DInt32(0, 0, +1),
+		Vector3DInt32(0, -1, 0),
+		Vector3DInt32(0, +1, 0),
+		Vector3DInt32(-1, 0, 0),
+		Vector3DInt32(+1, 0, 0)
+	};
+
+	const Vector3DInt32 arrayPathfinderEdges[12] =
+	{
+		Vector3DInt32(0, -1, -1),
+		Vector3DInt32(0, -1, +1),
+		Vector3DInt32(0, +1, -1),
+		Vector3DInt32(0, +1, +1),
+		Vector3DInt32(-1, 0, -1),
+		Vector3DInt32(-1, 0, +1),
+		Vector3DInt32(+1, 0, -1),
+		Vector3DInt32(+1, 0, +1),
+		Vector3DInt32(-1, -1, 0),
+		Vector3DInt32(-1, +1, 0),
+		Vector3DInt32(+1, -1, 0),
+		Vector3DInt32(+1, +1, 0)
+	};
+
+	const Vector3DInt32 arrayPathfinderCorners[8] =
+	{
+		Vector3DInt32(-1, -1, -1),
+		Vector3DInt32(-1, -1, +1),
+		Vector3DInt32(-1, +1, -1),
+		Vector3DInt32(-1, +1, +1),
+		Vector3DInt32(+1, -1, -1),
+		Vector3DInt32(+1, -1, +1),
+		Vector3DInt32(+1, +1, -1),
+		Vector3DInt32(+1, +1, +1)
+	};
+
 	////////////////////////////////////////////////////////////////////////////////
 	/// Using this function, a voxel is considered valid for the path if it is inside the
 	/// volume and if its density is below that returned by the voxel's getDensity() function.
@@ -34,7 +80,7 @@ namespace PolyVox
 	bool aStarDefaultVoxelValidator(const VolumeType* volData, const Vector3DInt32& v3dPos)
 	{
 		//Voxels are considered valid candidates for the path if they are inside the volume...
-		if(volData->getEnclosingRegion().containsPoint(v3dPos) == false)
+		if (volData->getEnclosingRegion().containsPoint(v3dPos) == false)
 		{
 			return false;
 		}
@@ -82,12 +128,12 @@ namespace PolyVox
 
 		float fDistStartToEnd = (endNode->position - startNode->position).length();
 		m_fProgress = 0.0f;
-		if(m_params.progressCallback)
+		if (m_params.progressCallback)
 		{
 			m_params.progressCallback(m_fProgress);
 		}
 
-		while((openNodes.empty() == false) && (openNodes.getFirst() != endNode))
+		while ((openNodes.empty() == false) && (openNodes.getFirst() != endNode))
 		{
 			//Move the first node from open to closed.
 			current = openNodes.getFirst();
@@ -95,13 +141,13 @@ namespace PolyVox
 			closedNodes.insert(current);
 
 			//Update the user on our progress
-			if(m_params.progressCallback)
+			if (m_params.progressCallback)
 			{
 				const float fMinProgresIncreament = 0.001f;
 				float fDistCurrentToEnd = (endNode->position - current->position).length();
 				float fDistNormalised = fDistCurrentToEnd / fDistStartToEnd;
 				float fProgress = 1.0f - fDistNormalised;
-				if(fProgress >= m_fProgress + fMinProgresIncreament)
+				if (fProgress >= m_fProgress + fMinProgresIncreament)
 				{
 					m_fProgress = fProgress;
 					m_params.progressCallback(m_fProgress);
@@ -115,7 +161,7 @@ namespace PolyVox
 
 			//Process the neighbours. Note the deliberate lack of 'break' 
 			//statements, larger connectivities include smaller ones.
-			switch(m_params.connectivity)
+			switch (m_params.connectivity)
 			{
 			case TwentySixConnected:
 				processNeighbour(current->position + arrayPathfinderCorners[0], current->gVal + fCornerCost);
@@ -128,16 +174,16 @@ namespace PolyVox
 				processNeighbour(current->position + arrayPathfinderCorners[7], current->gVal + fCornerCost);
 
 			case EighteenConnected:
-				processNeighbour(current->position + arrayPathfinderEdges[ 0], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 1], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 2], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 3], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 4], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 5], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 6], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 7], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 8], current->gVal + fEdgeCost);
-				processNeighbour(current->position + arrayPathfinderEdges[ 9], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[0], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[1], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[2], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[3], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[4], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[5], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[6], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[7], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[8], current->gVal + fEdgeCost);
+				processNeighbour(current->position + arrayPathfinderEdges[9], current->gVal + fEdgeCost);
 				processNeighbour(current->position + arrayPathfinderEdges[10], current->gVal + fEdgeCost);
 				processNeighbour(current->position + arrayPathfinderEdges[11], current->gVal + fEdgeCost);
 
@@ -150,7 +196,7 @@ namespace PolyVox
 				processNeighbour(current->position + arrayPathfinderFaces[5], current->gVal + fFaceCost);
 			}
 
-			if(allNodes.size() > m_params.maxNumberOfNodes)
+			if (allNodes.size() > m_params.maxNumberOfNodes)
 			{
 				//We've reached the specified maximum number
 				//of nodes. Just give up on the search.
@@ -158,7 +204,7 @@ namespace PolyVox
 			}
 		}
 
-		if((openNodes.empty()) || (openNodes.getFirst() != endNode))
+		if ((openNodes.empty()) || (openNodes.getFirst() != endNode))
 		{
 			//In this case we failed to find a valid path.
 			POLYVOX_THROW(std::runtime_error, "No path found");
@@ -171,14 +217,14 @@ namespace PolyVox
 			//custom sort operator for the set which we know only uses the position to sort. Hence we can safely
 			//modify other properties of the object while it is in the set.
 			Node* n = const_cast<Node*>(&(*endNode));
-			while(n != 0)
+			while (n != 0)
 			{
 				m_params.result->push_front(n->position);
 				n = n->parent;
 			}
 		}
 
-		if(m_params.progressCallback)
+		if (m_params.progressCallback)
 		{
 			m_params.progressCallback(1.0f);
 		}
@@ -188,7 +234,7 @@ namespace PolyVox
 	void AStarPathfinder<VolumeType>::processNeighbour(const Vector3DInt32& neighbourPos, float neighbourGVal)
 	{
 		bool bIsVoxelValidForPath = m_params.isVoxelValidForPath(m_params.volume, neighbourPos);
-		if(!bIsVoxelValidForPath)
+		if (!bIsVoxelValidForPath)
 		{
 			return;
 		}
@@ -198,16 +244,16 @@ namespace PolyVox
 		std::pair<AllNodesContainer::iterator, bool> insertResult = allNodes.insert(Node(neighbourPos.getX(), neighbourPos.getY(), neighbourPos.getZ()));
 		AllNodesContainer::iterator neighbour = insertResult.first;
 
-		if(insertResult.second == true) //New node, compute h.
+		if (insertResult.second == true) //New node, compute h.
 		{
 			Node* tempNeighbour = const_cast<Node*>(&(*neighbour));
-			tempNeighbour -> hVal = computeH(neighbour->position, m_params.end);
+			tempNeighbour->hVal = computeH(neighbour->position, m_params.end);
 		}
 
 		OpenNodesContainer::iterator openIter = openNodes.find(neighbour);
-		if(openIter != openNodes.end())
+		if (openIter != openNodes.end())
 		{
-			if(cost < neighbour->gVal)
+			if (cost < neighbour->gVal)
 			{
 				openNodes.remove(openIter);
 				openIter = openNodes.end();
@@ -216,9 +262,9 @@ namespace PolyVox
 
 		//TODO - Nodes could keep track of if they are in open or closed? And a pointer to where they are?
 		ClosedNodesContainer::iterator closedIter = closedNodes.find(neighbour);
-		if(closedIter != closedNodes.end())
+		if (closedIter != closedNodes.end())
 		{
-			if(cost < neighbour->gVal)
+			if (cost < neighbour->gVal)
 			{
 				//Probably shouldn't happen?
 				closedNodes.remove(closedIter);
@@ -226,7 +272,7 @@ namespace PolyVox
 			}
 		}
 
-		if((openIter == openNodes.end()) && (closedIter == closedNodes.end()))
+		if ((openIter == openNodes.end()) && (closedIter == closedNodes.end()))
 		{
 			//Regarding the const_cast - normally you should not modify an object which is in an sdt::set.
 			//The reason is that objects in a set are stored sorted in a tree so they can be accessed quickly,
@@ -244,7 +290,7 @@ namespace PolyVox
 	float AStarPathfinder<VolumeType>::SixConnectedCost(const Vector3DInt32& a, const Vector3DInt32& b)
 	{
 		//This is the only heuristic I'm sure of - just use the manhatten distance for the 6-connected case.
-		uint32_t faceSteps = std::abs(a.getX()-b.getX()) + std::abs(a.getY()-b.getY()) + std::abs(a.getZ()-b.getZ());
+		uint32_t faceSteps = std::abs(a.getX() - b.getX()) + std::abs(a.getY() - b.getY()) + std::abs(a.getZ() - b.getZ());
 
 		return faceSteps * 1.0f;
 	}
@@ -256,7 +302,7 @@ namespace PolyVox
 		//6-connected case. This means 'h' will be bigger than it should be, resulting in a faster path which may not 
 		//actually be the shortest one. If you have a correct heuristic for the 18-connected case then please let me know.
 
-		return SixConnectedCost(a,b);
+		return SixConnectedCost(a, b);
 	}
 
 	template<typename VolumeType>
@@ -268,7 +314,7 @@ namespace PolyVox
 		array[0] = std::abs(a.getX() - b.getX());
 		array[1] = std::abs(a.getY() - b.getY());
 		array[2] = std::abs(a.getZ() - b.getZ());
-		
+
 		//Maybe this is better implemented directly
 		//using three compares and two swaps... but not
 		//until the profiler says so.
@@ -285,8 +331,8 @@ namespace PolyVox
 	float AStarPathfinder<VolumeType>::computeH(const Vector3DInt32& a, const Vector3DInt32& b)
 	{
 		float hVal;
-			
-		switch(m_params.connectivity)
+
+		switch (m_params.connectivity)
 		{
 		case TwentySixConnected:
 			hVal = TwentySixConnectedCost(a, b);
@@ -294,7 +340,7 @@ namespace PolyVox
 		case EighteenConnected:
 			hVal = EighteenConnectedCost(a, b);
 			break;
-		case SixConnected:				
+		case SixConnected:
 			hVal = SixConnectedCost(a, b);
 			break;
 		default:
@@ -303,9 +349,9 @@ namespace PolyVox
 
 		//Sanity checks in debug mode. These can come out eventually, but I
 		//want to make sure that the heuristics I've come up with make sense.
-		POLYVOX_ASSERT((a-b).length() <= TwentySixConnectedCost(a,b), "A* heuristic error.");
-		POLYVOX_ASSERT(TwentySixConnectedCost(a,b) <= EighteenConnectedCost(a,b), "A* heuristic error.");
-		POLYVOX_ASSERT(EighteenConnectedCost(a,b) <= SixConnectedCost(a,b), "A* heuristic error.");
+		POLYVOX_ASSERT((a - b).length() <= TwentySixConnectedCost(a, b), "A* heuristic error.");
+		POLYVOX_ASSERT(TwentySixConnectedCost(a, b) <= EighteenConnectedCost(a, b), "A* heuristic error.");
+		POLYVOX_ASSERT(EighteenConnectedCost(a, b) <= SixConnectedCost(a, b), "A* heuristic error.");
 
 		//Apply the bias to the computed h value;
 		hVal *= m_params.hBias;
@@ -322,8 +368,8 @@ namespace PolyVox
 		//while the other one doesn't - both approaches are valid). For the same reason we want
 		//to make sure that position (x,y,z) has a differnt hash from e.g. position (x,z,y).
 		uint32_t aX = (a.getX() << 16) & 0x00FF0000;
-		uint32_t aY = (a.getY() <<  8) & 0x0000FF00;
-		uint32_t aZ = (a.getZ()      ) & 0x000000FF;
+		uint32_t aY = (a.getY() << 8) & 0x0000FF00;
+		uint32_t aZ = (a.getZ()) & 0x000000FF;
 		uint32_t hashVal = hash(aX | aY | aZ);
 
 		//Stop hashVal going over 65535, and divide by 1000000 to make sure it is small.
@@ -338,14 +384,14 @@ namespace PolyVox
 	// Robert Jenkins' 32 bit integer hash function
 	// http://www.burtleburtle.net/bob/hash/integer.html
 	template<typename VolumeType>
-	uint32_t AStarPathfinder<VolumeType>::hash( uint32_t a)
+	uint32_t AStarPathfinder<VolumeType>::hash(uint32_t a)
 	{
-		a = (a+0x7ed55d16) + (a<<12);
-		a = (a^0xc761c23c) ^ (a>>19);
-		a = (a+0x165667b1) + (a<<5);
-		a = (a+0xd3a2646c) ^ (a<<9);
-		a = (a+0xfd7046c5) + (a<<3);
-		a = (a^0xb55a4f09) ^ (a>>16);
+		a = (a + 0x7ed55d16) + (a << 12);
+		a = (a ^ 0xc761c23c) ^ (a >> 19);
+		a = (a + 0x165667b1) + (a << 5);
+		a = (a + 0xd3a2646c) ^ (a << 9);
+		a = (a + 0xfd7046c5) + (a << 3);
+		a = (a ^ 0xb55a4f09) ^ (a >> 16);
 		return a;
 	}
 }

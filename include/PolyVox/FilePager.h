@@ -1,33 +1,34 @@
 /*******************************************************************************
-Copyright (c) 2005-2009 David Williams
-
-This software is provided 'as-is', without any express or implied
-warranty. In no event will the authors be held liable for any damages
-arising from the use of this software.
-
-Permission is granted to anyone to use this software for any purpose,
-including commercial applications, and to alter it and redistribute it
-freely, subject to the following restrictions:
-
-    1. The origin of this software must not be misrepresented; you must not
-    claim that you wrote the original software. If you use this software
-    in a product, an acknowledgment in the product documentation would be
-    appreciated but is not required.
-
-    2. Altered source versions must be plainly marked as such, and must not be
-    misrepresented as being the original software.
-
-    3. This notice may not be removed or altered from any source
-    distribution. 	
+* The MIT License (MIT)
+*
+* Copyright (c) 2015 David Williams and Matthew Williams
+*
+* Permission is hereby granted, free of charge, to any person obtaining a copy
+* of this software and associated documentation files (the "Software"), to deal
+* in the Software without restriction, including without limitation the rights
+* to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+* copies of the Software, and to permit persons to whom the Software is
+* furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in all
+* copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+* AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+* LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+* OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+* SOFTWARE.
 *******************************************************************************/
 
 #ifndef __PolyVox_FilePager_H__
 #define __PolyVox_FilePager_H__
 
-#include "PolyVox/Impl/TypeDef.h"
+#include "Impl/PlatformDefinitions.h"
 
-#include "PolyVox/PagedVolume.h"
-#include "PolyVox/Region.h"
+#include "PagedVolume.h"
+#include "Region.h"
 
 #include <cstdlib>
 #include <ctime>
@@ -39,7 +40,12 @@ freely, subject to the following restrictions:
 namespace PolyVox
 {
 	/**
-	 * Provides an interface for performing paging of data.
+	 * An implementation of Pager which stores voxels to files on disk. Each chunk is written
+	 * to a seperate file and you can specify the name of a folder where these will be stored.
+	 *
+	 * Note that no compression is performed (mostly to avoid dependancies) so for large
+	 * volumes you may want to consider this class as an example and create a custom version
+	 * with compression.
 	 */
 	template <typename VoxelType>
 	class FilePager : public PagedVolume<VoxelType>::Pager
@@ -48,29 +54,28 @@ namespace PolyVox
 		/// Constructor
 		FilePager(const std::string& strFolderName = ".")
 			:PagedVolume<VoxelType>::Pager()
-			,m_strFolderName(strFolderName)
+			, m_strFolderName(strFolderName)
 		{
-			// Add the trailing slash, assuming the user dind't already do it.
+				// Add the trailing slash, assuming the user dind't already do it.
 				if ((m_strFolderName.back() != '/') && (m_strFolderName.back() != '\\'))
-			{
+				{
 					m_strFolderName.append("/");
-			}
+				}
 
-			// Build a unique prefix to avoid multiple pagers using the same filenames.
-			srand(static_cast<unsigned int>(time(0)));
-			int iRandomValue = rand();
-
-			std::stringstream ss;
-			ss << std::hex << iRandomValue;
-			m_strRandomPrefix = ss.str();
+				// Build a unique postfix to avoid filename conflicts between multiple pagers/runs.
+				// Not a very robust solution but this class is meant as an example for testing really.
+				std::stringstream ss;
+				ss << time(0) << "--"; // Avoid multiple runs using the same filenames.
+				ss << this; // Avoid multiple FilePagers using the same filenames.
+				m_strPostfix = ss.str();
 		}
 
 		/// Destructor
 		virtual ~FilePager()
 		{
-			for(std::vector<std::string>::iterator iter = m_vecCreatedFiles.begin(); iter < m_vecCreatedFiles.end(); iter++)
+			for (std::vector<std::string>::iterator iter = m_vecCreatedFiles.begin(); iter < m_vecCreatedFiles.end(); iter++)
 			{
-				POLYVOX_LOG_WARNING_IF(std::remove(iter->c_str()) != 0, "Failed to delete '" << *iter << "' when destroying FilePager");
+				POLYVOX_LOG_WARNING_IF(std::remove(iter->c_str()) != 0, "Failed to delete '", *iter, "' when destroying FilePager");
 			}
 
 			m_vecCreatedFiles.clear();
@@ -82,9 +87,10 @@ namespace PolyVox
 			POLYVOX_ASSERT(pChunk->getData(), "Chunk must have valid data");
 
 			std::stringstream ssFilename;
-			ssFilename << m_strFolderName << "/" << m_strRandomPrefix << "-"
+			ssFilename << m_strFolderName << "/"
 				<< region.getLowerX() << "_" << region.getLowerY() << "_" << region.getLowerZ() << "_"
-				 << region.getUpperX() << "_" << region.getUpperY() << "_" << region.getUpperZ();
+				<< region.getUpperX() << "_" << region.getUpperY() << "_" << region.getUpperZ()
+				<< "--" << m_strPostfix;
 
 			std::string filename = ssFilename.str();
 
@@ -92,14 +98,14 @@ namespace PolyVox
 			// the gameplay-cubiquity integration. See: https://github.com/blackberry/GamePlay/issues/919
 
 			FILE* pFile = fopen(filename.c_str(), "rb");
-			if(pFile)
+			if (pFile)
 			{
-				POLYVOX_LOG_TRACE("Paging in data for " << region);
+				POLYVOX_LOG_TRACE("Paging in data for ", region);
 
 				/*fseek(pFile, 0L, SEEK_END);
 				size_t fileSizeInBytes = ftell(pFile);
 				fseek(pFile, 0L, SEEK_SET);
-				
+
 				uint8_t* buffer = new uint8_t[fileSizeInBytes];
 				fread(buffer, sizeof(uint8_t), fileSizeInBytes, pFile);
 				pChunk->setData(buffer, fileSizeInBytes);
@@ -107,7 +113,7 @@ namespace PolyVox
 
 				fread(pChunk->getData(), sizeof(uint8_t), pChunk->getDataSizeInBytes(), pFile);
 
-				if(ferror(pFile))
+				if (ferror(pFile))
 				{
 					POLYVOX_THROW(std::runtime_error, "Error reading in chunk data, even though a file exists.");
 				}
@@ -116,7 +122,12 @@ namespace PolyVox
 			}
 			else
 			{
-				POLYVOX_LOG_TRACE("No data found for " << region << " during paging in.");
+				POLYVOX_LOG_TRACE("No data found for ", region, " during paging in.");
+
+				// Just fill with zeros. This feels hacky... perhaps we should just throw
+				// an exception and let the calling code handle it and fill with zeros.
+				uint32_t noOfVoxels = region.getWidthInVoxels() * region.getHeightInVoxels() * region.getDepthInVoxels();
+				std::fill(pChunk->getData(), pChunk->getData() + noOfVoxels, VoxelType());
 			}
 		}
 
@@ -125,12 +136,13 @@ namespace PolyVox
 			POLYVOX_ASSERT(pChunk, "Attempting to page out NULL chunk");
 			POLYVOX_ASSERT(pChunk->getData(), "Chunk must have valid data");
 
-			POLYVOX_LOG_TRACE("Paging out data for " << region);
+			POLYVOX_LOG_TRACE("Paging out data for ", region);
 
 			std::stringstream ssFilename;
-			ssFilename << m_strFolderName << "/" << m_strRandomPrefix << "-"
+			ssFilename << m_strFolderName << "/"
 				<< region.getLowerX() << "_" << region.getLowerY() << "_" << region.getLowerZ() << "_"
-				 << region.getUpperX() << "_" << region.getUpperY() << "_" << region.getUpperZ();
+				<< region.getUpperX() << "_" << region.getUpperY() << "_" << region.getUpperZ()
+				<< "--" << m_strPostfix;
 
 			std::string filename = ssFilename.str();
 
@@ -138,7 +150,7 @@ namespace PolyVox
 			// the gameplay-cubiquity integration. See: https://github.com/blackberry/GamePlay/issues/919
 
 			FILE* pFile = fopen(filename.c_str(), "wb");
-			if(!pFile)
+			if (!pFile)
 			{
 				POLYVOX_THROW(std::runtime_error, "Unable to open file to write out chunk data.");
 			}
@@ -148,7 +160,7 @@ namespace PolyVox
 
 			fwrite(pChunk->getData(), sizeof(uint8_t), pChunk->getDataSizeInBytes(), pFile);
 
-			if(ferror(pFile))
+			if (ferror(pFile))
 			{
 				POLYVOX_THROW(std::runtime_error, "Error writing out chunk data.");
 			}
@@ -158,7 +170,7 @@ namespace PolyVox
 
 	protected:
 		std::string m_strFolderName;
-		std::string m_strRandomPrefix;
+		std::string m_strPostfix;
 
 		std::vector<std::string> m_vecCreatedFiles;
 	};
