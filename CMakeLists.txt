@@ -22,9 +22,11 @@
 # SOFTWARE.
 ################################################################################
 
-CMAKE_MINIMUM_REQUIRED(VERSION 2.8.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8.12)
 
 PROJECT(PolyVox)
+
+# cmake --debug-output -DCMAKE_VERBOSE_MAKEFILE:BOOL=ON -DENABLE_BINDINGS:BOOL=ON .
 
 SET(POLYVOX_VERSION_MAJOR "0")
 SET(POLYVOX_VERSION_MINOR "2")
